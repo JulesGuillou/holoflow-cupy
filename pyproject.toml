@@ -13,6 +13,7 @@ dependencies = [
   "cupy-cuda13x>=14.0.1",
   "PySide6>=6.11.0",
   "PyOpenGL>=3.1.10",
+  "pyyaml>=6.0",
   "holofile",
   "viztracer>=1.1.1",
 ]

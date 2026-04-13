@@ -1,0 +1,32 @@
+# Holoflow configuration
+# Edit this file to change pipeline and display settings without touching source code.
+
+pipeline:
+  # Path to the .holo file to process.
+  file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+
+  # Frame range to process (inclusive start, exclusive end).
+  # Set end_frame to -1 to use all frames in the file.
+  start_frame: 0
+  end_frame: 16384
+
+  # Number of raw frames fed to the compute stage per batch.
+  batch_size: 32
+
+  # Data loading strategy:
+  #   live — stream from disk at runtime (lowest RAM, highest latency)
+  #   cpu  — preload all frames to pinned host RAM before starting
+  #   gpu  — preload all frames to VRAM before starting (fastest, most VRAM)
+  load_kind: cpu
+
+  # Number of slots in each inter-stage queue.
+  # Higher values absorb more jitter at the cost of memory.
+  queue_depth: 128
+
+ui:
+  window_title: "Holoflow - Real-time Doppler Holography"
+  window_width: 800
+  window_height: 600
+
+  # How often the UI polls the pipeline for new frames (Hz).
+  poll_fps: 100
