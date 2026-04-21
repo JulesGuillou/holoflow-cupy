@@ -16,10 +16,12 @@ dependencies = [
   "pyyaml>=6.0",
   "holofile",
   "viztracer>=1.1.1",
+  "matplotlib>=3.10.8",
 ]
 
 [project.scripts]
 holoflow = "holoflow.main:main"
+cupy_naive = "cupy_naive.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/holoflow"]
