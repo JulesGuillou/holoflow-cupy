@@ -3,7 +3,8 @@
 
 pipeline:
   # Path to the .holo file to process.
-  file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  # file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  file_path: E:\InputData\250220_GUJ0206_L.holo
 
   # Frame range to process (inclusive start, exclusive end).
   # Set end_frame to -1 to use all frames in the file.

@@ -1,0 +1,57 @@
+# CuPy-naive LDH benchmark configuration.
+#
+# Keep this file as the single source of truth for article benchmark runs.
+# The Python code should describe the benchmark model; this file should describe
+# the experiment being run.
+
+input:
+  path: 'E:\InputData\250220_GUJ0206_L.holo'
+
+signal:
+  sample_rate_hz: 37000.0
+  doppler_low_hz: 8000.0
+  doppler_high_hz: 16000.0
+
+  propagation_distance_m: 3.86e-1
+  wavelength_m: 8.52e-7
+  dx_m: 2.0e-5
+  dy_m: 2.0e-5
+
+schedule:
+  batch_frames: 32
+  batches_per_output: 64
+
+benchmark:
+  seconds: 10.0
+  warmup_outputs: 1
+
+display:
+  show_image: true
+  contrast_roi_radius: 0.8
+  contrast_low_percentile: 0.2
+  contrast_high_percentile: 99.8
+
+dtypes:
+  acquisition: uint8
+  real: float32
+  complex: complex64
+
+execution:
+  # Matrix mode is useful for article tables.
+  # To run a single mode, replace `mode_matrix` with an explicit `modes` list;
+  # see the commented example below.
+  # mode_matrix:
+  #   precompute_static_tensors: [false, true]
+  #   preallocate_work_buffers: [false, true]
+  #   dummy_gil_thread: [false, true]
+
+  dummy_gil_inner_loops: 200000
+  dummy_gil_switch_interval_s: 0.0005
+
+  # Example explicit mode list:
+  #
+  modes:
+    - name: 'cupy-naive | precompute=on | prealloc=on | gil=off'
+      precompute_static_tensors: true
+      preallocate_work_buffers: true
+      enable_dummy_gil_thread: false
