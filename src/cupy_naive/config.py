@@ -49,6 +49,7 @@ class Params:
     contrast_roi_radius: float
     contrast_low_percentile: float
     contrast_high_percentile: float
+    report_path: str
 
     # Dtype contract
     acquisition_dtype: np.dtype
@@ -175,6 +176,7 @@ def _load_params(raw: Mapping[str, Any]) -> Params:
             _required(display_cfg, "contrast_high_percentile"),
             "display.contrast_high_percentile",
         ),
+        report_path=str(display_cfg.get("report_path", "cupy_naive_report.txt")),
         acquisition_dtype=np.dtype(_required(dtype_cfg, "acquisition")),
         real_dtype=np.dtype(_required(dtype_cfg, "real")),
         complex_dtype=np.dtype(_required(dtype_cfg, "complex")),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,83 +11,93 @@ from .cupy_naive import BenchmarkStats
 
 
 # ============================================================================
-# Console reporting
+# Text reporting
 # ============================================================================
 
 
-def print_table(title: str, rows: list[list[object]]) -> None:
-    print(f"\n{title}")
-    print(tabulate(rows, tablefmt="github"))
+def format_table(title: str, rows: list[list[object]]) -> str:
+    return f"\n{title}\n{tabulate(rows, tablefmt='github')}"
 
 
-def print_stats(stats: BenchmarkStats) -> None:
-    print("\nSteady-state benchmark")
-    print("----------------------")
+def format_stats(stats: BenchmarkStats) -> str:
+    sections = ["\nSteady-state benchmark", "----------------------"]
 
-    print_table(
-        "Mode",
-        [
-            ["Name", stats.mode_name],
-            ["Precompute static tensors", stats.precompute_static_tensors],
-            ["Preallocate work buffers", stats.preallocate_work_buffers],
-        ],
-    )
-
-    print_table(
-        "Timing",
-        [
-            ["Time", f"{stats.seconds:.3f} s"],
-            ["Frames", stats.frames],
-            ["Batches", stats.batches],
-            ["Outputs", stats.outputs],
-            ["Wall time / output", f"{stats.wall_ms_per_output:.2f} ms"],
-        ],
-    )
-
-    print_table(
-        "Rates",
-        [
-            ["Input FPS", f"{stats.input_fps:.1f} frames/s"],
-            ["Batches / s", f"{stats.batches_per_second:.2f}"],
-            ["Outputs / s", f"{stats.outputs_per_second:.2f}"],
-        ],
-    )
-
-    print_table(
-        "Bandwidth",
-        [
-            ["H2D", f"{stats.h2d_gbps:.3f} GB/s"],
-            ["Cast throughput", f"{stats.cast_effective_gbps:.3f} GB/s"],
-            ["D2H output", f"{stats.d2h_output_mbps:.3f} MB/s"],
-        ],
-    )
-
-    print_table(
-        "Data types",
-        [
-            ["File", stats.file_dtype],
-            ["Host", stats.host_dtype],
-            ["Device input", stats.device_input_dtype],
-            ["Real", stats.real_dtype],
-            ["Complex", stats.complex_dtype],
-        ],
-    )
-
-    print_table(
-        "Pipeline",
-        [
+    sections.append(
+        format_table(
+            "Mode",
             [
-                "Doppler bins",
-                f"[{stats.doppler_bins[0]}:{stats.doppler_bins[1]}) "
-                f"({stats.doppler_bin_count})",
+                ["Name", stats.mode_name],
+                ["Precompute static tensors", stats.precompute_static_tensors],
+                ["Preallocate work buffers", stats.preallocate_work_buffers],
             ],
+        )
+    )
+
+    sections.append(
+        format_table(
+            "Timing",
             [
-                "Sliding window",
-                f"{stats.batches_per_output} batches = {stats.frames_per_output} frames",
+                ["Time", f"{stats.seconds:.3f} s"],
+                ["Frames", stats.frames],
+                ["Batches", stats.batches],
+                ["Outputs", stats.outputs],
+                ["Wall time / output", f"{stats.wall_ms_per_output:.2f} ms"],
             ],
-            ["Output stride", f"1 batch = {stats.output_stride_frames} frames"],
-            ["Temporal support", f"{stats.temporal_support_ms:.3f} ms"],
-        ],
+        )
+    )
+
+    sections.append(
+        format_table(
+            "Rates",
+            [
+                ["Input FPS", f"{stats.input_fps:.1f} frames/s"],
+                ["Batches / s", f"{stats.batches_per_second:.2f}"],
+                ["Outputs / s", f"{stats.outputs_per_second:.2f}"],
+            ],
+        )
+    )
+
+    sections.append(
+        format_table(
+            "Bandwidth",
+            [
+                ["H2D", f"{stats.h2d_gbps:.3f} GB/s"],
+                ["Cast throughput", f"{stats.cast_effective_gbps:.3f} GB/s"],
+                ["D2H output", f"{stats.d2h_output_mbps:.3f} MB/s"],
+            ],
+        )
+    )
+
+    sections.append(
+        format_table(
+            "Data types",
+            [
+                ["File", stats.file_dtype],
+                ["Host", stats.host_dtype],
+                ["Device input", stats.device_input_dtype],
+                ["Real", stats.real_dtype],
+                ["Complex", stats.complex_dtype],
+            ],
+        )
+    )
+
+    sections.append(
+        format_table(
+            "Pipeline",
+            [
+                [
+                    "Doppler bins",
+                    f"[{stats.doppler_bins[0]}:{stats.doppler_bins[1]}) "
+                    f"({stats.doppler_bin_count})",
+                ],
+                [
+                    "Sliding window",
+                    f"{stats.batches_per_output} batches = {stats.frames_per_output} frames",
+                ],
+                ["Output stride", f"1 batch = {stats.output_stride_frames} frames"],
+                ["Temporal support", f"{stats.temporal_support_ms:.3f} ms"],
+            ],
+        )
     )
 
     gil_rows = [
@@ -113,10 +124,12 @@ def print_stats(stats: BenchmarkStats) -> None:
             ]
         )
 
-    print_table("Host-side GIL stress", gil_rows)
+    sections.append(format_table("Host-side GIL stress", gil_rows))
+
+    return "\n".join(sections)
 
 
-def print_suite_summary(stats_list: Sequence[BenchmarkStats]) -> None:
+def format_suite_summary(stats_list: Sequence[BenchmarkStats]) -> str:
     rows: list[list[object]] = []
 
     for stats in stats_list:
@@ -141,28 +154,43 @@ def print_suite_summary(stats_list: Sequence[BenchmarkStats]) -> None:
             ]
         )
 
-    print("\nSuite summary")
-    print("-------------")
-    print(
-        tabulate(
-            rows,
-            headers=[
-                "Mode",
-                "Precompute",
-                "Preallocate",
-                "GIL",
-                "Switch interval (s)",
-                "Outputs/s",
-                "ms/output",
-                "Input FPS",
-                "H2D GB/s",
-                "Cast GB/s",
-                "D2H MB/s",
-                "Dummy iter/s",
-            ],
-            tablefmt="github",
-        )
+    return "\n".join(
+        [
+            "\nSuite summary",
+            "-------------",
+            tabulate(
+                rows,
+                headers=[
+                    "Mode",
+                    "Precompute",
+                    "Preallocate",
+                    "GIL",
+                    "Switch interval (s)",
+                    "Outputs/s",
+                    "ms/output",
+                    "Input FPS",
+                    "H2D GB/s",
+                    "Cast GB/s",
+                    "D2H MB/s",
+                    "Dummy iter/s",
+                ],
+                tablefmt="github",
+            ),
+        ]
     )
+
+
+def format_report(stats_list: Sequence[BenchmarkStats]) -> str:
+    sections = [format_suite_summary(stats_list), "\nDetailed results", "----------------"]
+    sections.extend(format_stats(stats) for stats in stats_list)
+    return "\n".join(sections).lstrip() + "\n"
+
+
+def write_report(path: str | Path, stats_list: Sequence[BenchmarkStats]) -> Path:
+    report_path = Path(path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(format_report(stats_list), encoding="utf-8")
+    return report_path
 
 
 # ============================================================================

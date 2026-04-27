@@ -26,6 +26,7 @@ benchmark:
   warmup_outputs: 1
 
 display:
+  report_path: 'cupy_naive_report.txt'
   show_image: true
   contrast_roi_radius: 0.8
   contrast_low_percentile: 0.2

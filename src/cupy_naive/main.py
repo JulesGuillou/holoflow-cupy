@@ -6,7 +6,7 @@ from pathlib import Path
 from cupy_naive.config import load_benchmark_config
 from cupy_naive.io import preload_batches, read_input_info, validate_input
 from cupy_naive.cupy_naive import benchmark_suite
-from cupy_naive.reporting import print_stats, print_suite_summary, show_image
+from cupy_naive.reporting import show_image, write_report
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,12 +48,8 @@ def main() -> None:
 
     stats_list = [stats for _, stats in results]
 
-    print_suite_summary(stats_list)
-
-    print("\nDetailed results")
-    print("----------------")
-    for stats in stats_list:
-        print_stats(stats)
+    report_path = write_report(params.report_path, stats_list)
+    print(f"Wrote benchmark report to {report_path}")
 
     if params.show_image and results:
         image, stats = results[-1]
