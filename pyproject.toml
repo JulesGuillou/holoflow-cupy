@@ -25,7 +25,7 @@ holoflow = "holoflow.main:main"
 cupy_naive = "cupy_naive.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/holoflow"]
+packages = ["src/holoflow", "src/cupy_naive"]
 
 [tool.uv.sources]
 holofile = { git = "https://github.com/JulesGuillou/holofile.git", rev = "main" }

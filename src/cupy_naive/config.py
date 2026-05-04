@@ -24,7 +24,7 @@ class Params:
     """
 
     # Input
-    path: str
+    file_path: str
 
     # Execution schedule
     batch_frames: int
@@ -55,6 +55,10 @@ class Params:
     acquisition_dtype: np.dtype
     real_dtype: np.dtype
     complex_dtype: np.dtype
+
+    @property
+    def path(self) -> str:
+        return self.file_path
 
     @property
     def sliding_window_batches(self) -> int:
@@ -130,7 +134,7 @@ def _load_params(raw: Mapping[str, Any]) -> Params:
     dtype_cfg = _section(raw, "dtypes")
 
     return Params(
-        path=str(_required(input_cfg, "path")),
+        file_path=_input_file_path(input_cfg),
         batch_frames=_as_int(_required(schedule_cfg, "batch_frames"), "batch_frames"),
         batches_per_output=_as_int(
             _required(schedule_cfg, "batches_per_output"),
@@ -331,6 +335,13 @@ def _validate_params(params: Params) -> None:
         raise ValueError(
             "display percentiles must satisfy 0 <= low < high <= 100."
         )
+
+
+def _input_file_path(input_cfg: Mapping[str, Any]) -> str:
+    value = input_cfg.get("file_path", input_cfg.get("path"))
+    if value is None:
+        raise KeyError("Missing required configuration key: input.file_path")
+    return str(value)
 
 
 def _mode_name(precompute: bool, preallocate: bool, gil_enabled: bool) -> str:

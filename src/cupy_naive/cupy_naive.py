@@ -108,27 +108,29 @@ def start_dummy_gil_thread(
     if not mode.enable_dummy_gil_thread:
         return None, None
 
-    previous_switch_interval = None
-    if mode.dummy_gil_switch_interval_s is not None:
-        previous_switch_interval = sys.getswitchinterval()
-        sys.setswitchinterval(mode.dummy_gil_switch_interval_s)
+    with time_range("start dummy GIL thread", color_id=40):
+        previous_switch_interval = None
+        if mode.dummy_gil_switch_interval_s is not None:
+            previous_switch_interval = sys.getswitchinterval()
+            sys.setswitchinterval(mode.dummy_gil_switch_interval_s)
 
-    thread = DummyGilThread(mode.dummy_gil_inner_loops)
-    thread.start()
-    thread.wait_until_ready()
-    return thread, previous_switch_interval
+        thread = DummyGilThread(mode.dummy_gil_inner_loops)
+        thread.start()
+        thread.wait_until_ready()
+        return thread, previous_switch_interval
 
 
 def stop_dummy_gil_thread(
     thread: DummyGilThread | None,
     previous_switch_interval: float | None,
 ) -> None:
-    if thread is not None:
-        thread.stop()
-        thread.join()
+    with time_range("stop dummy GIL thread", color_id=41):
+        if thread is not None:
+            thread.stop()
+            thread.join()
 
-    if previous_switch_interval is not None:
-        sys.setswitchinterval(previous_switch_interval)
+        if previous_switch_interval is not None:
+            sys.setswitchinterval(previous_switch_interval)
 
 
 def clear_cupy_pools() -> None:
@@ -137,9 +139,10 @@ def clear_cupy_pools() -> None:
     This does not invalidate still-live arrays. It only frees blocks currently
     held by CuPy's allocators.
     """
-    cp.cuda.get_current_stream().synchronize()
-    cp.get_default_memory_pool().free_all_blocks()
-    cp.get_default_pinned_memory_pool().free_all_blocks()
+    with time_range("clear CuPy pools", color_id=30):
+        cp.cuda.get_current_stream().synchronize()
+        cp.get_default_memory_pool().free_all_blocks()
+        cp.get_default_pinned_memory_pool().free_all_blocks()
 
 
 # ============================================================================
@@ -183,13 +186,18 @@ def make_quadratic_phase(height: int, width: int, params: Params) -> cp.ndarray:
     """
     real = np.dtype(params.real_dtype).type
 
-    x = centered_coordinates(width, params.dx_m, params.real_dtype)
-    y = centered_coordinates(height, params.dy_m, params.real_dtype)
+    with time_range("build Fresnel coordinates", color_id=31):
+        x = centered_coordinates(width, params.dx_m, params.real_dtype)
+        y = centered_coordinates(height, params.dy_m, params.real_dtype)
 
-    radius_sq = cp.square(y)[:, None] + cp.square(x)[None, :]
-    phase = radius_sq * real(np.pi / (params.wavelength_m * params.propagation_distance_m))
+    with time_range("build Fresnel phase", color_id=32):
+        radius_sq = cp.square(y)[:, None] + cp.square(x)[None, :]
+        phase = radius_sq * real(
+            np.pi / (params.wavelength_m * params.propagation_distance_m)
+        )
 
-    return cp.exp(1j * phase).astype(params.complex_dtype, copy=False)
+    with time_range("materialize Fresnel phase", color_id=33):
+        return cp.exp(1j * phase).astype(params.complex_dtype, copy=False)
 
 
 def make_normalized_elliptical_mask(
@@ -204,11 +212,13 @@ def make_normalized_elliptical_mask(
     dtype = np.dtype(np.float32)
     real = dtype.type
 
-    x = centered_coordinates(width, 2.0 / width, dtype)
-    y = centered_coordinates(height, 2.0 / height, dtype)
+    with time_range("build ROI coordinates", color_id=34):
+        x = centered_coordinates(width, 2.0 / width, dtype)
+        y = centered_coordinates(height, 2.0 / height, dtype)
 
-    radius_sq = cp.square(y)[:, None] + cp.square(x)[None, :]
-    return radius_sq <= real(radius * radius)
+    with time_range("build ROI mask", color_id=35):
+        radius_sq = cp.square(y)[:, None] + cp.square(x)[None, :]
+        return radius_sq <= real(radius * radius)
 
 
 # ============================================================================
@@ -257,24 +267,26 @@ class SlidingMean2D:
         return self._fill == self.window_length
 
     def push(self, image: cp.ndarray) -> bool:
-        slot = self.buffer[self._head]
+        with time_range("sliding mean update", color_id=12):
+            slot = self.buffer[self._head]
 
-        self.rolling_sum[...] -= slot
-        slot[...] = image
-        self.rolling_sum[...] += slot
+            self.rolling_sum[...] -= slot
+            slot[...] = image
+            self.rolling_sum[...] += slot
 
-        self._head = (self._head + 1) % self.window_length
-        if self._fill < self.window_length:
-            self._fill += 1
+            self._head = (self._head + 1) % self.window_length
+            if self._fill < self.window_length:
+                self._fill += 1
 
         return self.is_full
 
     def mean(self) -> cp.ndarray:
-        if self.mean_image is None:
-            return self.rolling_sum / self._normalization
+        with time_range("sliding mean divide", color_id=13):
+            if self.mean_image is None:
+                return self.rolling_sum / self._normalization
 
-        cp.divide(self.rolling_sum, self._normalization, out=self.mean_image)
-        return self.mean_image
+            cp.divide(self.rolling_sum, self._normalization, out=self.mean_image)
+            return self.mean_image
 
 
 class PercentileClipDisplay2D:
@@ -310,14 +322,15 @@ class PercentileClipDisplay2D:
         self.low_percentile = low_percentile
         self.high_percentile = high_percentile
 
-        self.roi_mask = (
-            make_normalized_elliptical_mask(height, width, roi_radius)
-            if precompute_mask
-            else None
-        )
-        self.output = (
-            cp.empty((height, width), dtype=dtype) if reuse_output_buffer else None
-        )
+        with time_range("init display clipper", color_id=36):
+            self.roi_mask = (
+                make_normalized_elliptical_mask(height, width, roi_radius)
+                if precompute_mask
+                else None
+            )
+            self.output = (
+                cp.empty((height, width), dtype=dtype) if reuse_output_buffer else None
+            )
 
     def _roi_mask(self) -> cp.ndarray:
         if self.roi_mask is not None:
@@ -330,17 +343,21 @@ class PercentileClipDisplay2D:
         )
 
     def apply(self, image: cp.ndarray) -> cp.ndarray:
-        roi_values = image[self._roi_mask()]
-        q_low, q_high = cp.percentile(
-            roi_values,
-            [self.low_percentile, self.high_percentile],
-        )
+        with time_range("select display ROI", color_id=14):
+            roi_values = image[self._roi_mask()]
 
-        if self.output is None:
-            return cp.clip(image, q_low, q_high)
+        with time_range("display percentiles", color_id=15):
+            q_low, q_high = cp.percentile(
+                roi_values,
+                [self.low_percentile, self.high_percentile],
+            )
 
-        cp.clip(image, q_low, q_high, out=self.output)
-        return self.output
+        with time_range("display clip", color_id=16):
+            if self.output is None:
+                return cp.clip(image, q_low, q_high)
+
+            cp.clip(image, q_low, q_high, out=self.output)
+            return self.output
 
 
 # ============================================================================
@@ -383,37 +400,40 @@ class PowerDopplerPipeline:
         )
         self.doppler_bin_count = self.k1 - self.k0
 
-        self.quadratic_phase = (
-            make_quadratic_phase(self.height, self.width, params)
-            if mode.precompute_static_tensors
-            else None
-        )
+        with time_range("init static tensors", color_id=37):
+            self.quadratic_phase = (
+                make_quadratic_phase(self.height, self.width, params)
+                if mode.precompute_static_tensors
+                else None
+            )
 
-        if mode.preallocate_work_buffers:
-            self.raw_batch_device = cp.empty(
-                (self.batch_frames, self.height, self.width),
-                dtype=params.acquisition_dtype,
-            )
-            self.real_batch_device = cp.empty(
-                (self.batch_frames, self.height, self.width),
-                dtype=params.real_dtype,
-            )
-            self.output_host = cupyx.empty_pinned(
-                (self.height, self.width),
-                dtype=params.real_dtype,
-            )
-        else:
-            self.raw_batch_device = None
-            self.real_batch_device = None
-            self.output_host = None
+        with time_range("init work buffers", color_id=38):
+            if mode.preallocate_work_buffers:
+                self.raw_batch_device = cp.empty(
+                    (self.batch_frames, self.height, self.width),
+                    dtype=params.acquisition_dtype,
+                )
+                self.real_batch_device = cp.empty(
+                    (self.batch_frames, self.height, self.width),
+                    dtype=params.real_dtype,
+                )
+                self.output_host = cupyx.empty_pinned(
+                    (self.height, self.width),
+                    dtype=params.real_dtype,
+                )
+            else:
+                self.raw_batch_device = None
+                self.real_batch_device = None
+                self.output_host = None
 
-        self.sliding_mean = SlidingMean2D(
-            window_length=params.sliding_window_batches,
-            height=self.height,
-            width=self.width,
-            dtype=params.real_dtype,
-            reuse_mean_buffer=mode.preallocate_work_buffers,
-        )
+        with time_range("init sliding mean", color_id=39):
+            self.sliding_mean = SlidingMean2D(
+                window_length=params.sliding_window_batches,
+                height=self.height,
+                width=self.width,
+                dtype=params.real_dtype,
+                reuse_mean_buffer=mode.preallocate_work_buffers,
+            )
 
         self.display_clipper = PercentileClipDisplay2D(
             height=self.height,
@@ -450,9 +470,9 @@ class PowerDopplerPipeline:
 
         with time_range("D2H output", color_id=10):
             if self.output_host is None:
-                return display_image.get()
+                return display_image.get(blocking=True)
 
-            display_image.get(out=self.output_host)
+            display_image.get(out=self.output_host, blocking=True)
 
             # Return an owning NumPy array so later iterations cannot mutate
             # the image stored by reporting/plotting code.
@@ -523,23 +543,27 @@ class BenchmarkRunner:
         batches_to_prime = self.pipeline.params.sliding_window_batches - 1
 
         print("Priming sliding window...")
-        for _ in range(batches_to_prime):
-            ready = self.pipeline.process_batch(next(self.host_batch_iter))
-            if ready:
-                raise RuntimeError("Sliding window became ready too early.")
+        with time_range("prime sliding window", color_id=42):
+            for _ in range(batches_to_prime):
+                ready = self.pipeline.process_batch(next(self.host_batch_iter))
+                if ready:
+                    raise RuntimeError("Sliding window became ready too early.")
 
-        cp.cuda.get_current_stream().synchronize()
+        with time_range("sync after prime", color_id=43):
+            cp.cuda.get_current_stream().synchronize()
 
     def warmup(self) -> None:
         """Produce a small number of outputs before timed measurement."""
         print("Warming up...")
-        for _ in range(self.pipeline.params.warmup_outputs):
-            ready = self.pipeline.process_batch(next(self.host_batch_iter))
-            if not ready:
-                raise RuntimeError("Sliding window should be ready during warmup.")
-            self.pipeline.export_display_image()
+        with time_range("warmup outputs", color_id=44):
+            for _ in range(self.pipeline.params.warmup_outputs):
+                ready = self.pipeline.process_batch(next(self.host_batch_iter))
+                if not ready:
+                    raise RuntimeError("Sliding window should be ready during warmup.")
+                self.pipeline.export_display_image()
 
-        cp.cuda.get_current_stream().synchronize()
+        with time_range("sync after warmup", color_id=45):
+            cp.cuda.get_current_stream().synchronize()
 
     def run(self) -> tuple[np.ndarray, BenchmarkStats]:
         params = self.pipeline.params
@@ -560,23 +584,27 @@ class BenchmarkRunner:
         try:
             dummy_thread, previous_switch_interval = start_dummy_gil_thread(mode)
 
-            t0 = perf_counter()
-            while elapsed < params.benchmark_seconds:
-                ready = self.pipeline.process_batch(next(self.host_batch_iter))
-                if not ready:
-                    raise RuntimeError("Sliding window unexpectedly lost readiness.")
+            with time_range("steady-state benchmark loop", color_id=46):
+                t0 = perf_counter()
+                while elapsed < params.benchmark_seconds:
+                    ready = self.pipeline.process_batch(next(self.host_batch_iter))
+                    if not ready:
+                        raise RuntimeError(
+                            "Sliding window unexpectedly lost readiness."
+                        )
 
-                total_batches += 1
-                total_frames += params.batch_frames
+                    total_batches += 1
+                    total_frames += params.batch_frames
 
-                last_image = self.pipeline.export_display_image()
-                total_outputs += 1
+                    last_image = self.pipeline.export_display_image()
+                    total_outputs += 1
 
-                # This is intentionally synchronized per output. It keeps the
-                # naive execution model simple and makes wall-clock measurements
-                # correspond to completed display images.
-                cp.cuda.get_current_stream().synchronize()
-                elapsed = perf_counter() - t0
+                    # This is intentionally synchronized per output. It keeps
+                    # the naive execution model simple and makes wall-clock
+                    # measurements correspond to completed display images.
+                    with time_range("sync per output", color_id=17):
+                        cp.cuda.get_current_stream().synchronize()
+                    elapsed = perf_counter() - t0
 
         finally:
             stop_dummy_gil_thread(dummy_thread, previous_switch_interval)
@@ -660,11 +688,12 @@ def benchmark_mode(
 
     clear_cupy_pools()
 
-    pipeline = PowerDopplerPipeline(info=info, params=params, mode=mode)
-    runner = BenchmarkRunner(
-        pipeline=pipeline,
-        host_batch_iter=cycle_batches(host_batches),
-    )
+    with time_range(f"init mode {mode.name}", color_id=47):
+        pipeline = PowerDopplerPipeline(info=info, params=params, mode=mode)
+        runner = BenchmarkRunner(
+            pipeline=pipeline,
+            host_batch_iter=cycle_batches(host_batches),
+        )
 
     print()
     print("=" * 80)
@@ -680,9 +709,10 @@ def benchmark_mode(
             f"dummy_gil_switch_interval_s={mode.dummy_gil_switch_interval_s}"
         )
 
-    runner.prime()
-    runner.warmup()
-    image, stats = runner.run()
+    with time_range(f"run mode {mode.name}", color_id=48):
+        runner.prime()
+        runner.warmup()
+        image, stats = runner.run()
 
     clear_cupy_pools()
     return image, stats
