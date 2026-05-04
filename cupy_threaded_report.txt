@@ -1,0 +1,423 @@
+Suite summary
+-------------
+| Mode                                                    | Precompute   | Preallocate   | GIL   |   Switch interval (s) |   Outputs/s |   ms/output |   Input FPS |   H2D GB/s |   Cast GB/s |   D2H MB/s |   Dummy iter/s |
+|---------------------------------------------------------|--------------|---------------|-------|-----------------------|-------------|-------------|-------------|------------|-------------|------------|----------------|
+| cupy-threaded | precompute=off | prealloc=off | gil=off | off          | off           | off   |                0.0005 |      701.05 |        1.43 |       22433 |      3.675 |      14.702 |    459.437 |              0 |
+| cupy-threaded | precompute=off | prealloc=off | gil=on  | off          | off           | on    |                0.0005 |      518.14 |        1.93 |       16580 |      2.717 |      10.866 |    339.566 |        4179494 |
+| cupy-threaded | precompute=off | prealloc=on | gil=off  | off          | on            | off   |                0.0005 |      698.05 |        1.43 |       22338 |      3.66  |      14.639 |    457.474 |              0 |
+| cupy-threaded | precompute=off | prealloc=on | gil=on   | off          | on            | on    |                0.0005 |      559.04 |        1.79 |       17889 |      2.931 |      11.724 |    366.376 |        4219584 |
+| cupy-threaded | precompute=on | prealloc=off | gil=off  | on           | off           | off   |                0.0005 |      915.06 |        1.09 |       29282 |      4.798 |      19.19  |    599.697 |              0 |
+| cupy-threaded | precompute=on | prealloc=off | gil=on   | on           | off           | on    |                0.0005 |      668.52 |        1.5  |       21393 |      3.505 |      14.02  |    438.119 |        4799404 |
+| cupy-threaded | precompute=on | prealloc=on | gil=off   | on           | on            | off   |                0.0005 |      954.63 |        1.05 |       30548 |      5.005 |      20.02  |    625.626 |              0 |
+| cupy-threaded | precompute=on | prealloc=on | gil=on    | on           | on            | on    |                0.0005 |      684.98 |        1.46 |       21920 |      3.591 |      14.365 |    448.912 |        4759200 |
+
+Detailed results
+----------------
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|---------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=off | prealloc=off | gil=off |
+| Precompute static tensors | False                                                   |
+| Preallocate work buffers  | False                                                   |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 224352   |
+| Batches            | 7011     |
+| Outputs            | 7011     |
+| Wall time / output | 1.43 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 22433.5 frames/s |
+| Batches / s | 701.05           |
+| Outputs / s | 701.05           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 3.675 GB/s   |
+| Cast throughput | 14.702 GB/s  |
+| D2H output      | 459.437 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|------------|
+| Dummy GIL thread  | disabled   |
+| Dummy inner loops | 200000     |
+| Switch interval   | 0.000500 s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|--------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=off | prealloc=off | gil=on |
+| Precompute static tensors | False                                                  |
+| Preallocate work buffers  | False                                                  |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 165824   |
+| Batches            | 5182     |
+| Outputs            | 5182     |
+| Wall time / output | 1.93 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 16580.4 frames/s |
+| Batches / s | 518.14           |
+| Outputs / s | 518.14           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 2.717 GB/s   |
+| Cast throughput | 10.866 GB/s  |
+| D2H output      | 339.566 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|----------------|
+| Dummy GIL thread  | enabled        |
+| Dummy inner loops | 200000         |
+| Switch interval   | 0.000500 s     |
+| Dummy iterations  | 41800000       |
+| Dummy rate        | 4179494 iter/s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|--------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=off | prealloc=on | gil=off |
+| Precompute static tensors | False                                                  |
+| Preallocate work buffers  | True                                                   |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 223392   |
+| Batches            | 6981     |
+| Outputs            | 6981     |
+| Wall time / output | 1.43 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 22337.6 frames/s |
+| Batches / s | 698.05           |
+| Outputs / s | 698.05           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 3.660 GB/s   |
+| Cast throughput | 14.639 GB/s  |
+| D2H output      | 457.474 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|------------|
+| Dummy GIL thread  | disabled   |
+| Dummy inner loops | 200000     |
+| Switch interval   | 0.000500 s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|-------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=off | prealloc=on | gil=on |
+| Precompute static tensors | False                                                 |
+| Preallocate work buffers  | True                                                  |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 178912   |
+| Batches            | 5591     |
+| Outputs            | 5591     |
+| Wall time / output | 1.79 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 17889.4 frames/s |
+| Batches / s | 559.04           |
+| Outputs / s | 559.04           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 2.931 GB/s   |
+| Cast throughput | 11.724 GB/s  |
+| D2H output      | 366.376 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|----------------|
+| Dummy GIL thread  | enabled        |
+| Dummy inner loops | 200000         |
+| Switch interval   | 0.000500 s     |
+| Dummy iterations  | 42200000       |
+| Dummy rate        | 4219584 iter/s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|--------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=on | prealloc=off | gil=off |
+| Precompute static tensors | True                                                   |
+| Preallocate work buffers  | False                                                  |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 292864   |
+| Batches            | 9152     |
+| Outputs            | 9152     |
+| Wall time / output | 1.09 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 29282.1 frames/s |
+| Batches / s | 915.06           |
+| Outputs / s | 915.06           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 4.798 GB/s   |
+| Cast throughput | 19.190 GB/s  |
+| D2H output      | 599.697 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|------------|
+| Dummy GIL thread  | disabled   |
+| Dummy inner loops | 200000     |
+| Switch interval   | 0.000500 s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|-------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=on | prealloc=off | gil=on |
+| Precompute static tensors | True                                                  |
+| Preallocate work buffers  | False                                                 |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 213952   |
+| Batches            | 6686     |
+| Outputs            | 6686     |
+| Wall time / output | 1.50 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 21392.5 frames/s |
+| Batches / s | 668.52           |
+| Outputs / s | 668.52           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 3.505 GB/s   |
+| Cast throughput | 14.020 GB/s  |
+| D2H output      | 438.119 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|----------------|
+| Dummy GIL thread  | enabled        |
+| Dummy inner loops | 200000         |
+| Switch interval   | 0.000500 s     |
+| Dummy iterations  | 48000000       |
+| Dummy rate        | 4799404 iter/s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|-------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=on | prealloc=on | gil=off |
+| Precompute static tensors | True                                                  |
+| Preallocate work buffers  | True                                                  |
+
+Timing
+|--------------------|----------|
+| Time               | 10.001 s |
+| Frames             | 305504   |
+| Batches            | 9547     |
+| Outputs            | 9547     |
+| Wall time / output | 1.05 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 30548.1 frames/s |
+| Batches / s | 954.63           |
+| Outputs / s | 954.63           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 5.005 GB/s   |
+| Cast throughput | 20.020 GB/s  |
+| D2H output      | 625.626 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|------------|
+| Dummy GIL thread  | disabled   |
+| Dummy inner loops | 200000     |
+| Switch interval   | 0.000500 s |
+
+Steady-state benchmark
+----------------------
+
+Mode
+|---------------------------|------------------------------------------------------|
+| Name                      | cupy-threaded | precompute=on | prealloc=on | gil=on |
+| Precompute static tensors | True                                                 |
+| Preallocate work buffers  | True                                                 |
+
+Timing
+|--------------------|----------|
+| Time               | 10.002 s |
+| Frames             | 219232   |
+| Batches            | 6851     |
+| Outputs            | 6851     |
+| Wall time / output | 1.46 ms  |
+
+Rates
+|-------------|------------------|
+| Input FPS   | 21919.5 frames/s |
+| Batches / s | 684.98           |
+| Outputs / s | 684.98           |
+
+Bandwidth
+|-----------------|--------------|
+| H2D             | 3.591 GB/s   |
+| Cast throughput | 14.365 GB/s  |
+| D2H output      | 448.912 MB/s |
+
+Data types
+|--------------|-----------|
+| File         | uint8     |
+| Host         | uint8     |
+| Device input | uint8     |
+| Real         | float32   |
+| Complex      | complex64 |
+
+Pipeline
+|------------------|--------------------------|
+| Doppler bins     | [7:14) (7)               |
+| Sliding window   | 64 batches = 2048 frames |
+| Output stride    | 1 batch = 32 frames      |
+| Temporal support | 55.351 ms                |
+
+Host-side GIL stress
+|-------------------|----------------|
+| Dummy GIL thread  | enabled        |
+| Dummy inner loops | 200000         |
+| Switch interval   | 0.000500 s     |
+| Dummy iterations  | 47600000       |
+| Dummy rate        | 4759200 iter/s |

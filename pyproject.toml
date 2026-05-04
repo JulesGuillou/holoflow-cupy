@@ -23,9 +23,10 @@ dependencies = [
 [project.scripts]
 holoflow = "holoflow.main:main"
 cupy_naive = "cupy_naive.main:main"
+cupy_threaded = "cupy_threaded.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/holoflow", "src/cupy_naive"]
+packages = ["src/holoflow", "src/cupy_naive", "src/cupy_threaded"]
 
 [tool.uv.sources]
 holofile = { git = "https://github.com/JulesGuillou/holofile.git", rev = "main" }

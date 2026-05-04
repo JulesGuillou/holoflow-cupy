@@ -1,8 +1,7 @@
-# CuPy-naive LDH benchmark configuration.
+# Multi-threaded CuPy LDH benchmark configuration.
 #
-# Keep this file as the single source of truth for article benchmark runs.
-# The Python code should describe the benchmark model; this file should describe
-# the experiment being run.
+# The math and physical parameters match the CuPy-naive benchmark. The
+# additional `threading` section controls the host queue schedule.
 
 input:
   # path: 'E:\InputData\250220_GUJ0206_L.holo'
@@ -27,7 +26,7 @@ benchmark:
   warmup_outputs: 1
 
 display:
-  report_path: 'cupy_naive_report.txt'
+  report_path: 'cupy_threaded_report.txt'
   show_image: true
   contrast_roi_radius: 0.8
   contrast_low_percentile: 0.2
@@ -39,21 +38,26 @@ dtypes:
   complex: complex64
 
 execution:
-  # Matrix mode is useful for article tables.
-  # To run a single mode, replace `mode_matrix` with an explicit `modes` list;
-  # see the commented example below.
   mode_matrix:
     precompute_static_tensors: [false, true]
     preallocate_work_buffers: [false, true]
     dummy_gil_thread: [false, true]
 
-  dummy_gil_inner_loops: 200000
-  dummy_gil_switch_interval_s: 0.0005
-
   # Example explicit mode list:
   #
   # modes:
-  #   - name: 'cupy-naive | precompute=on | prealloc=on | gil=off'
+  #   - name: 'cupy-threaded | precompute=on | prealloc=on | gil=off'
   #     precompute_static_tensors: true
   #     preallocate_work_buffers: true
-  #     enable_dummy_gil_thread: false
+  #     enable_dummy_gil_thread: true
+
+  dummy_gil_inner_loops: 200000
+  dummy_gil_switch_interval_s: 0.00005
+
+threading:
+  queue_depth: 8
+  # timed_put uses queue.put(..., timeout=queue_put_timeout_s) for every queue
+  # output operation. nowait uses queue.put_nowait and retries in the spin loop.
+  queue_put_policy: timed_put
+  queue_put_timeout_s: 0.5
+  gil_switch_interval_s: 0.0005
