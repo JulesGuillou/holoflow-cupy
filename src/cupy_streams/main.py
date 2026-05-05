@@ -43,7 +43,14 @@ def load_stream_runtime_config(path: str | Path) -> SingleThreadStreamRuntimeCon
         num_slots=_as_positive_int(
             streams_cfg.get("num_slots", SingleThreadStreamRuntimeConfig.num_slots),
             "streams.num_slots",
-        )
+        ),
+        h2d_prefetch_batches=_as_non_negative_int(
+            streams_cfg.get(
+                "h2d_prefetch_batches",
+                SingleThreadStreamRuntimeConfig.h2d_prefetch_batches,
+            ),
+            "streams.h2d_prefetch_batches",
+        ),
     )
 
 
@@ -53,6 +60,15 @@ def _as_positive_int(value: Any, name: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise ValueError(f"{name} must be positive, got {parsed}.")
+    return parsed
+
+
+def _as_non_negative_int(value: Any, name: str) -> int:
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer, not bool.")
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError(f"{name} must be non-negative, got {parsed}.")
     return parsed
 
 
@@ -67,7 +83,10 @@ def main() -> None:
         runtime = load_stream_runtime_config(args.config)
 
     print(f"Using config: {args.config}")
-    print(f"Single-thread stream runtime: num_slots={runtime.num_slots}")
+    print(
+        f"Single-thread stream runtime: num_slots={runtime.num_slots}, "
+        f"h2d_prefetch_batches={runtime.h2d_prefetch_batches}"
+    )
 
     with time_range("streams inspect input", color_id=132):
         print("Inspecting input...")

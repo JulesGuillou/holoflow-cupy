@@ -36,7 +36,8 @@ def benchmark_mode(
     print(
         f"  precompute_static_tensors={mode.precompute_static_tensors} | "
         f"preallocate_work_buffers={mode.preallocate_work_buffers} | "
-        f"num_slots={runtime.num_slots}"
+        f"num_slots={runtime.num_slots} | "
+        f"h2d_prefetch_batches={runtime.h2d_prefetch_batches}"
     )
     if mode.enable_dummy_gil_thread:
         print(
@@ -114,5 +115,7 @@ def _stream_mode_name(
     else:
         name = f"cupy-streams | {name}"
 
-    return f"{name} | slots={runtime.num_slots}"
-
+    return (
+        f"{name} | slots={runtime.num_slots} | "
+        f"h2d_prefetch={runtime.h2d_prefetch_batches}"
+    )

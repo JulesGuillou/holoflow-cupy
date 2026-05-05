@@ -73,6 +73,11 @@ H2D, compute, and D2H work into three CUDA streams. CUDA events connect the
 stage dependencies and gate ring-buffer slot reuse, so the stream/event graph
 replaces the worker queues used by the threaded implementation.
 
+The stream scheduler also keeps `streams.h2d_prefetch_batches` uploads queued
+ahead of compute submission. This is useful on devices where H2D and D2H share
+one async copy engine, because it queues the next upload before the current
+output download can block the copy engine.
+
 Run it with:
 
 ```powershell

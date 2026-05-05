@@ -28,9 +28,29 @@ class SingleThreadStreamRuntimeConfig:
 
     `num_slots` is the maximum number of batches admitted into the stream/event
     graph. Slot reuse is gated by the slot's previous D2H completion event.
+
+    `h2d_prefetch_batches` keeps that many uploads queued ahead of the oldest
+    batch whose compute/D2H work has not been submitted yet. This avoids copy
+    engine head-of-line blocking on devices where D2H and later H2D work share
+    one async copy engine.
     """
 
-    num_slots: int = 2
+    num_slots: int = 3
+    h2d_prefetch_batches: int = 1
+
+    def __post_init__(self) -> None:
+        if self.num_slots <= 0:
+            raise ValueError(f"num_slots must be positive, got {self.num_slots}.")
+        if self.h2d_prefetch_batches < 0:
+            raise ValueError(
+                "h2d_prefetch_batches must be non-negative, got "
+                f"{self.h2d_prefetch_batches}."
+            )
+        if self.h2d_prefetch_batches >= self.num_slots - 1:
+            raise ValueError(
+                "h2d_prefetch_batches must leave at least two non-prefetch slots, got "
+                f"{self.h2d_prefetch_batches} and {self.num_slots}."
+            )
 
 
 @dataclass(frozen=True)
@@ -73,9 +93,6 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         mode: ExecutionMode,
         runtime: SingleThreadStreamRuntimeConfig,
     ) -> None:
-        if runtime.num_slots <= 0:
-            raise ValueError(f"num_slots must be positive, got {runtime.num_slots}.")
-
         self.runtime = runtime
         self.h2d_stream = cp.cuda.Stream(non_blocking=True)
         self.compute_stream = cp.cuda.Stream(non_blocking=True)
@@ -96,6 +113,7 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
 
         self.slots = [self._make_slot(index) for index in range(runtime.num_slots)]
         self._next_sequence = 0
+        self._prefetched_slots: deque[StreamSlot] = deque()
         self._pending_outputs: deque[StreamSlot] = deque()
         self._completed_outputs: deque[StreamOutput] = deque()
 
@@ -138,7 +156,16 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         # float64 clip bounds, and cp.clip promotes the returned image.
         return np.dtype(np.float64)
 
+    @property
+    def prefetched_batch_count(self) -> int:
+        return len(self._prefetched_slots)
+
     def submit_batch(self, host_batch: np.ndarray) -> int:
+        sequence = self.prefetch_batch(host_batch)
+        self.schedule_oldest_prefetched_batch()
+        return sequence
+
+    def prefetch_batch(self, host_batch: np.ndarray) -> int:
         sequence = self._next_sequence
         self._next_sequence += 1
 
@@ -153,6 +180,17 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         with self.h2d_stream, time_range("streams H2D upload", color_id=120):
             slot.raw_batch_device.set(host_batch, stream=self.h2d_stream)
             slot.h2d_done.record(self.h2d_stream)
+
+        self._prefetched_slots.append(slot)
+        return sequence
+
+    def schedule_oldest_prefetched_batch(self) -> int:
+        if not self._prefetched_slots:
+            raise RuntimeError("No prefetched stream batch is ready to schedule.")
+
+        slot = self._prefetched_slots.popleft()
+        if slot.sequence is None:
+            raise RuntimeError("Cannot schedule an unassigned stream slot.")
 
         self.compute_stream.wait_event(slot.h2d_done)
         with self.compute_stream, time_range("streams compute batch", color_id=121):
@@ -178,7 +216,7 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
 
             slot.d2h_done.record(self.d2h_stream)
 
-        return sequence
+        return slot.sequence
 
     def _wait_until_reusable(self, slot: StreamSlot) -> None:
         if slot.sequence is None:
@@ -225,9 +263,27 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
                 self._pending_outputs[0].d2h_done.synchronize()
 
     def finish(self) -> None:
+        if self._prefetched_slots:
+            self.discard_prefetched_batches()
+
+        with time_range("streams final H2D sync", color_id=125):
+            self.h2d_stream.synchronize()
+        with time_range("streams final compute sync", color_id=125):
+            self.compute_stream.synchronize()
         with time_range("streams final D2H sync", color_id=125):
             self.d2h_stream.synchronize()
         self.poll_completed_outputs()
+
+    def discard_prefetched_batches(self) -> None:
+        with time_range("streams discard prefetched H2D", color_id=125):
+            self.h2d_stream.synchronize()
+
+        while self._prefetched_slots:
+            slot = self._prefetched_slots.popleft()
+            slot.host_input = None
+            slot.sequence = None
+            slot.output_ready = False
+            slot.output_collected = True
 
     def _collect_slot_output(self, slot: StreamSlot) -> None:
         if not slot.output_ready or slot.output_collected:
@@ -257,6 +313,18 @@ class SingleThreadStreamBenchmarkRunner:
 
     def _submit_next_batch(self) -> int:
         return self.pipeline.submit_batch(next(self.host_batch_iter))
+
+    def _prefetch_next_batch(self) -> int:
+        return self.pipeline.prefetch_batch(next(self.host_batch_iter))
+
+    def _submit_next_batch_with_h2d_lookahead(self) -> int:
+        while (
+            self.pipeline.prefetched_batch_count
+            <= self.pipeline.runtime.h2d_prefetch_batches
+        ):
+            self._prefetch_next_batch()
+
+        return self.pipeline.schedule_oldest_prefetched_batch()
 
     def prime(self) -> None:
         batches_to_prime = self.pipeline.params.sliding_window_batches - 1
@@ -294,7 +362,7 @@ class SingleThreadStreamBenchmarkRunner:
             with time_range("streams steady-state benchmark loop", color_id=128):
                 t0 = perf_counter()
                 while elapsed < params.benchmark_seconds:
-                    self._submit_next_batch()
+                    self._submit_next_batch_with_h2d_lookahead()
 
                     for output in self.pipeline.poll_completed_outputs():
                         completed += 1
