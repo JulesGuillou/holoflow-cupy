@@ -5,10 +5,12 @@ from pathlib import Path
 
 from cupyx.profiler import time_range
 
-from .config import load_benchmark_config
-from .cupy_naive import benchmark_suite, clear_cupy_pools
-from .io import preload_batches, read_input_info, validate_input
-from .reporting import format_report, show_image, write_report
+from holoflow_benchmarks.config import load_benchmark_config
+from holoflow_benchmarks.io import preload_batches, read_input_info, validate_input
+from holoflow_benchmarks.reporting import format_report, show_image, write_report
+from holoflow_benchmarks.runtime import clear_cupy_pools
+
+from .benchmark import benchmark_suite
 
 
 DEFAULT_CONFIG_PATH = Path("config_cupy_naive.yaml")
@@ -31,7 +33,10 @@ def main() -> None:
     args = parse_args()
 
     with time_range("load benchmark config", color_id=20):
-        params, modes = load_benchmark_config(args.config)
+        params, modes = load_benchmark_config(
+            args.config,
+            implementation_name="cupy-naive",
+        )
 
     print(f"Using config: {args.config}")
 

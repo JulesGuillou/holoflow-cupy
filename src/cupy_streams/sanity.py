@@ -3,11 +3,12 @@ from __future__ import annotations
 import cupyx
 import numpy as np
 
-from cupy_naive.config import ExecutionMode, Params
-from cupy_naive.cupy_naive import PowerDopplerPipeline, clear_cupy_pools
-from cupy_naive.io import InputInfo, cycle_batches
+from holoflow_benchmarks.config import ExecutionMode, Params
+from holoflow_benchmarks.io import InputInfo, cycle_batches
+from holoflow_benchmarks.runtime import clear_cupy_pools
 
-from .cupy_streams import (
+from .compute import PowerDopplerPipeline
+from .schedule import (
     SingleThreadStreamPowerDopplerPipeline,
     SingleThreadStreamRuntimeConfig,
 )
@@ -21,7 +22,7 @@ def run_sanity_check() -> None:
 
     for mode in _sanity_modes():
         clear_cupy_pools()
-        expected = _run_naive_once(host_batches, info, params, mode)
+        expected = _run_sequential_once(host_batches, info, params, mode)
 
         for num_slots in (2, 3):
             clear_cupy_pools()
@@ -76,7 +77,7 @@ def _sanity_modes() -> list[ExecutionMode]:
             modes.append(
                 ExecutionMode(
                     name=(
-                        "cupy-naive | "
+                        "cupy-streams sanity | "
                         f"precompute={'on' if precompute else 'off'} | "
                         f"prealloc={'on' if preallocate else 'off'} | "
                         "gil=off"
@@ -109,7 +110,7 @@ def _sanity_batches(info: InputInfo, params: Params) -> np.ndarray:
     return host_batches
 
 
-def _run_naive_once(
+def _run_sequential_once(
     host_batches: np.ndarray,
     info: InputInfo,
     params: Params,
@@ -121,11 +122,11 @@ def _run_naive_once(
     for _ in range(params.sliding_window_batches - 1):
         ready = pipeline.process_batch(next(host_batch_iter))
         if ready:
-            raise RuntimeError("Naive sanity pipeline became ready too early.")
+            raise RuntimeError("Sequential sanity pipeline became ready too early.")
 
     ready = pipeline.process_batch(next(host_batch_iter))
     if not ready:
-        raise RuntimeError("Naive sanity pipeline did not produce an output.")
+        raise RuntimeError("Sequential sanity pipeline did not produce an output.")
 
     return pipeline.export_display_image()
 

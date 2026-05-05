@@ -27,7 +27,13 @@ cupy_threaded = "cupy_threaded.main:main"
 cupy_streams = "cupy_streams.main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/holoflow", "src/cupy_naive", "src/cupy_threaded", "src/cupy_streams"]
+packages = [
+  "src/holoflow",
+  "src/holoflow_benchmarks",
+  "src/cupy_naive",
+  "src/cupy_threaded",
+  "src/cupy_streams",
+]
 
 [tool.uv.sources]
 holofile = { git = "https://github.com/JulesGuillou/holofile.git", rev = "main" }

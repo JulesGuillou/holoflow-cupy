@@ -6,14 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from cupyx.profiler import time_range
-import yaml
 
-from cupy_naive.config import load_benchmark_config
-from cupy_naive.cupy_naive import clear_cupy_pools
-from cupy_naive.io import preload_batches, read_input_info, validate_input
-from cupy_naive.reporting import format_report, show_image, write_report
+from holoflow_benchmarks.config import load_benchmark_config, load_yaml_mapping
+from holoflow_benchmarks.io import preload_batches, read_input_info, validate_input
+from holoflow_benchmarks.reporting import format_report, show_image, write_report
+from holoflow_benchmarks.runtime import clear_cupy_pools
 
-from .cupy_threaded import ThreadedRuntimeConfig, benchmark_suite
+from .benchmark import benchmark_suite
+from .schedule import ThreadedRuntimeConfig
 
 
 DEFAULT_CONFIG_PATH = Path("config_cupy_threaded.yaml")
@@ -33,11 +33,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_threaded_runtime_config(path: str | Path) -> ThreadedRuntimeConfig:
-    with Path(path).open("r", encoding="utf-8") as stream:
-        raw = yaml.safe_load(stream) or {}
-
-    if not isinstance(raw, Mapping):
-        raise TypeError(f"{path} must contain a YAML mapping at the top level.")
+    raw = load_yaml_mapping(path)
 
     threading_cfg = raw.get("threading", {})
     if not isinstance(threading_cfg, Mapping):
@@ -135,7 +131,10 @@ def main() -> None:
     args = parse_args()
 
     with time_range("load threaded benchmark config", color_id=70):
-        params, modes = load_benchmark_config(args.config)
+        params, modes = load_benchmark_config(
+            args.config,
+            implementation_name="cupy-threaded",
+        )
         runtime = load_threaded_runtime_config(args.config)
 
     print(f"Using config: {args.config}")

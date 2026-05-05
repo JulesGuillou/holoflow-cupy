@@ -1,5 +1,25 @@
 # holoflow-cupy
 
+## Benchmark code layout
+
+The three CuPy benchmark implementations are intentionally isolated from each
+other:
+
+- `src/cupy_naive/`
+- `src/cupy_threaded/`
+- `src/cupy_streams/`
+
+Each implementation follows the same local shape:
+
+- `compute.py`: implementation-local Doppler/Fresnel/display math.
+- `schedule.py`: implementation-local execution schedule.
+- `benchmark.py`: benchmark-mode orchestration and stats construction.
+- `main.py`: CLI config, input preload, report writing, and optional display.
+
+Shared non-compute utilities live in `src/holoflow_benchmarks/`: config loading,
+input IO, reporting, memory-pool cleanup, GIL stress helpers, and benchmark
+statistics.
+
 ## CuPy-naive benchmark
 
 The CuPy-naive benchmark is a deliberately single-stream, single-threaded
