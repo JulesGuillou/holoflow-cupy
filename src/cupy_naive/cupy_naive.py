@@ -342,7 +342,7 @@ class PercentileClipDisplay2D:
             radius=self.roi_radius,
         )
 
-    def apply(self, image: cp.ndarray) -> cp.ndarray:
+    def apply(self, image: cp.ndarray, out: cp.ndarray | None = None) -> cp.ndarray:
         with time_range("select display ROI", color_id=14):
             roi_values = image[self._roi_mask()]
 
@@ -353,6 +353,10 @@ class PercentileClipDisplay2D:
             )
 
         with time_range("display clip", color_id=16):
+            if out is not None:
+                cp.clip(image, q_low, q_high, out=out)
+                return out
+
             if self.output is None:
                 return cp.clip(image, q_low, q_high)
 
@@ -383,7 +387,15 @@ class PowerDopplerPipeline:
     and device-to-host export.
     """
 
-    def __init__(self, info: InputInfo, params: Params, mode: ExecutionMode) -> None:
+    def __init__(
+        self,
+        info: InputInfo,
+        params: Params,
+        mode: ExecutionMode,
+        *,
+        allocate_batch_io_buffers: bool = True,
+        reuse_display_output: bool | None = None,
+    ) -> None:
         self.info = info
         self.params = params
         self.mode = mode
@@ -408,7 +420,7 @@ class PowerDopplerPipeline:
             )
 
         with time_range("init work buffers", color_id=38):
-            if mode.preallocate_work_buffers:
+            if mode.preallocate_work_buffers and allocate_batch_io_buffers:
                 self.raw_batch_device = cp.empty(
                     (self.batch_frames, self.height, self.width),
                     dtype=params.acquisition_dtype,
@@ -443,7 +455,11 @@ class PowerDopplerPipeline:
             low_percentile=params.contrast_low_percentile,
             high_percentile=params.contrast_high_percentile,
             precompute_mask=mode.precompute_static_tensors,
-            reuse_output_buffer=mode.preallocate_work_buffers,
+            reuse_output_buffer=(
+                mode.preallocate_work_buffers
+                if reuse_display_output is None
+                else reuse_display_output
+            ),
         )
 
     def _quadratic_phase(self) -> cp.ndarray:
@@ -457,8 +473,20 @@ class PowerDopplerPipeline:
         batch_power = self._compute_batch_power(host_batch)
         return self.sliding_mean.push(batch_power)
 
+    @time_range("process_batch_device", color_id=0)
+    def process_batch_device(
+        self,
+        raw_batch_device: cp.ndarray,
+        real_batch_device: cp.ndarray | None = None,
+    ) -> bool:
+        batch_power = self.compute_batch_power_device(
+            raw_batch_device=raw_batch_device,
+            real_batch_device=real_batch_device,
+        )
+        return self.sliding_mean.push(batch_power)
+
     @time_range("finalize_output", color_id=6)
-    def export_display_image(self) -> np.ndarray:
+    def finalize_display_image_device(self, out: cp.ndarray | None = None) -> cp.ndarray:
         with time_range("average", color_id=7):
             averaged = self.sliding_mean.mean()
 
@@ -466,7 +494,11 @@ class PowerDopplerPipeline:
             shifted = cp.fft.fftshift(averaged)
 
         with time_range("percentile clip", color_id=9):
-            display_image = self.display_clipper.apply(shifted)
+            return self.display_clipper.apply(shifted, out=out)
+
+    @time_range("export_display_image", color_id=6)
+    def export_display_image(self) -> np.ndarray:
+        display_image = self.finalize_display_image_device()
 
         with time_range("D2H output", color_id=10):
             if self.output_host is None:
@@ -489,15 +521,28 @@ class PowerDopplerPipeline:
                 self.raw_batch_device.set(host_batch)
                 raw_batch_device = self.raw_batch_device
 
+        return self.compute_batch_power_device(raw_batch_device=raw_batch_device)
+
+    def compute_batch_power_device(
+        self,
+        raw_batch_device: cp.ndarray,
+        real_batch_device: cp.ndarray | None = None,
+    ) -> cp.ndarray:
+        real_work_buffer = (
+            real_batch_device
+            if real_batch_device is not None
+            else self.real_batch_device
+        )
+
         with time_range("cast to f32", color_id=2):
-            if self.real_batch_device is None:
+            if real_work_buffer is None:
                 real_batch_device = raw_batch_device.astype(
                     self.params.real_dtype,
                     copy=False,
                 )
             else:
-                cp.copyto(self.real_batch_device, raw_batch_device, casting="unsafe")
-                real_batch_device = self.real_batch_device
+                cp.copyto(real_work_buffer, raw_batch_device, casting="unsafe")
+                real_batch_device = real_work_buffer
 
         with time_range("temporal FFT + band select", color_id=3):
             temporal_spectrum = cp.fft.rfft(real_batch_device, axis=0)[

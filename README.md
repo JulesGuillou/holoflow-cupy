@@ -45,3 +45,28 @@ Capture CUDA and NVTX ranges with Nsight Systems:
 ```powershell
 nsys profile -t cuda,nvtx -o cupy_threaded .\.venv\Scripts\python.exe -m cupy_threaded.main --config config_cupy_threaded.yaml
 ```
+
+## CuPy single-thread stream benchmark
+
+The stream benchmark keeps one host scheduling thread and submits asynchronous
+H2D, compute, and D2H work into three CUDA streams. CUDA events connect the
+stage dependencies and gate ring-buffer slot reuse, so the stream/event graph
+replaces the worker queues used by the threaded implementation.
+
+Run it with:
+
+```powershell
+uv run cupy_streams --config config_cupy_streams.yaml
+```
+
+Run the synthetic sanity check:
+
+```powershell
+uv run python -m cupy_streams.sanity
+```
+
+Capture CUDA and NVTX ranges with Nsight Systems:
+
+```powershell
+nsys profile -t cuda,nvtx -o cupy_streams .\.venv\Scripts\python.exe -m cupy_streams.main --config config_cupy_streams.yaml
+```
