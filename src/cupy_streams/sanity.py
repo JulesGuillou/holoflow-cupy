@@ -24,7 +24,7 @@ def run_sanity_check() -> None:
         clear_cupy_pools()
         expected = _run_sequential_once(host_batches, info, params, mode)
 
-        for num_slots, h2d_prefetch_batches in ((2, 0), (3, 1), (4, 1)):
+        for num_slots, pipeline_prefetch_batches in ((2, 1), (3, 1), (4, 2), (5, 3)):
             clear_cupy_pools()
             actual = _run_stream_once(
                 host_batches,
@@ -32,19 +32,19 @@ def run_sanity_check() -> None:
                 params,
                 mode,
                 num_slots,
-                h2d_prefetch_batches,
+                pipeline_prefetch_batches,
             )
 
             if actual.shape != expected.shape:
                 raise AssertionError(
                     f"{mode.name}, num_slots={num_slots}, "
-                    f"h2d_prefetch={h2d_prefetch_batches}: shape mismatch, "
+                    f"pipeline_prefetch={pipeline_prefetch_batches}: shape mismatch, "
                     f"got {actual.shape}, expected {expected.shape}."
                 )
             if actual.dtype != expected.dtype:
                 raise AssertionError(
                     f"{mode.name}, num_slots={num_slots}, "
-                    f"h2d_prefetch={h2d_prefetch_batches}: dtype mismatch, "
+                    f"pipeline_prefetch={pipeline_prefetch_batches}: dtype mismatch, "
                     f"got {actual.dtype}, expected {expected.dtype}."
                 )
 
@@ -146,7 +146,7 @@ def _run_stream_once(
     params: Params,
     mode: ExecutionMode,
     num_slots: int,
-    h2d_prefetch_batches: int,
+    pipeline_prefetch_batches: int,
 ) -> np.ndarray:
     pipeline = SingleThreadStreamPowerDopplerPipeline(
         info=info,
@@ -154,7 +154,7 @@ def _run_stream_once(
         mode=mode,
         runtime=SingleThreadStreamRuntimeConfig(
             num_slots=num_slots,
-            h2d_prefetch_batches=h2d_prefetch_batches,
+            pipeline_prefetch_batches=pipeline_prefetch_batches,
         ),
     )
     host_batch_iter = cycle_batches(host_batches)

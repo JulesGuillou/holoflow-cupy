@@ -29,27 +29,28 @@ class SingleThreadStreamRuntimeConfig:
     `num_slots` is the maximum number of batches admitted into the stream/event
     graph. Slot reuse is gated by the slot's previous D2H completion event.
 
-    `h2d_prefetch_batches` keeps that many uploads queued ahead of the oldest
-    batch whose compute/D2H work has not been submitted yet. This avoids copy
-    engine head-of-line blocking on devices where D2H and later H2D work share
-    one async copy engine.
+    `pipeline_prefetch_batches` is the number of logical pipeline ticks kept
+    submitted ahead of completed outputs during steady state. Each tick submits
+    H2D for x_t, compute for x_{t-1}, and D2H for x_{t-2} when those items
+    exist. CUDA events preserve dependencies while allowing API calls to be
+    queued before the work is executable.
     """
 
     num_slots: int = 3
-    h2d_prefetch_batches: int = 1
+    pipeline_prefetch_batches: int = 1
 
     def __post_init__(self) -> None:
         if self.num_slots <= 0:
             raise ValueError(f"num_slots must be positive, got {self.num_slots}.")
-        if self.h2d_prefetch_batches < 0:
+        if self.pipeline_prefetch_batches <= 0:
             raise ValueError(
-                "h2d_prefetch_batches must be non-negative, got "
-                f"{self.h2d_prefetch_batches}."
+                "pipeline_prefetch_batches must be positive, got "
+                f"{self.pipeline_prefetch_batches}."
             )
-        if self.h2d_prefetch_batches >= self.num_slots - 1:
+        if self.pipeline_prefetch_batches >= self.num_slots:
             raise ValueError(
-                "h2d_prefetch_batches must leave at least two non-prefetch slots, got "
-                f"{self.h2d_prefetch_batches} and {self.num_slots}."
+                "pipeline_prefetch_batches must be smaller than num_slots, got "
+                f"{self.pipeline_prefetch_batches} and {self.num_slots}."
             )
 
 
@@ -71,6 +72,7 @@ class StreamSlot:
     d2h_done: cp.cuda.Event
     host_input: np.ndarray | None = None
     sequence: int | None = None
+    display_ready: bool = False
     output_ready: bool = False
     output_collected: bool = True
 
@@ -113,7 +115,8 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
 
         self.slots = [self._make_slot(index) for index in range(runtime.num_slots)]
         self._next_sequence = 0
-        self._prefetched_slots: deque[StreamSlot] = deque()
+        self._h2d_queue: deque[StreamSlot] = deque()
+        self._compute_queue: deque[StreamSlot] = deque()
         self._pending_outputs: deque[StreamSlot] = deque()
         self._completed_outputs: deque[StreamOutput] = deque()
 
@@ -157,15 +160,60 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         return np.dtype(np.float64)
 
     @property
-    def prefetched_batch_count(self) -> int:
-        return len(self._prefetched_slots)
+    def h2d_queue_depth(self) -> int:
+        return len(self._h2d_queue)
+
+    @property
+    def compute_queue_depth(self) -> int:
+        return len(self._compute_queue)
 
     def submit_batch(self, host_batch: np.ndarray) -> int:
-        sequence = self.prefetch_batch(host_batch)
-        self.schedule_oldest_prefetched_batch()
+        sequence = self.prefetch_batch(host_batch, tick=None)
+        self.schedule_oldest_h2d_batch(tick=None)
+        self.schedule_oldest_compute_batch(tick=None)
         return sequence
 
-    def prefetch_batch(self, host_batch: np.ndarray) -> int:
+    def submit_pipeline_tick(self, host_batch: np.ndarray) -> int:
+        """Submit one formal pipeline tick in source-to-sink API order.
+
+        At tick t this enqueues H2D for x_t, compute for x_{t-1}, and D2H for
+        x_{t-2} when those older stage queues are non-empty. The pre-existing
+        queue lengths are captured before H2D submission so a new item cannot
+        advance through multiple stages in the same logical tick.
+        """
+        schedule_compute = bool(self._h2d_queue)
+        schedule_d2h = bool(self._compute_queue)
+        tick = self._next_sequence
+        compute_sequence = self._h2d_queue[0].sequence if schedule_compute else None
+        d2h_sequence = self._compute_queue[0].sequence if schedule_d2h else None
+
+        tick_label = (
+            f"streams tick {tick}: "
+            f"H2D batch {tick}; "
+            f"compute batch {self._optional_sequence_label(compute_sequence)}; "
+            f"D2H batch {self._optional_sequence_label(d2h_sequence)}"
+        )
+        with time_range(tick_label, color_id=128):
+            sequence = self.prefetch_batch(host_batch, tick=tick)
+
+            if schedule_compute:
+                self.schedule_oldest_h2d_batch(tick=tick)
+            if schedule_d2h:
+                self.schedule_oldest_compute_batch(tick=tick)
+
+        return sequence
+
+    @staticmethod
+    def _optional_sequence_label(sequence: int | None) -> str:
+        return "-" if sequence is None else str(sequence)
+
+    def _stage_label(self, stage: str, sequence: int, tick: int | None) -> str:
+        if tick is None:
+            return f"streams {stage} batch {sequence}"
+
+        return f"streams tick {tick}: {stage} batch {sequence}"
+
+    def prefetch_batch(self, host_batch: np.ndarray, tick: int | None) -> int:
         sequence = self._next_sequence
         self._next_sequence += 1
 
@@ -174,26 +222,29 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
 
         slot.host_input = host_batch
         slot.sequence = sequence
+        slot.display_ready = False
         slot.output_ready = False
         slot.output_collected = True
 
-        with self.h2d_stream, time_range("streams H2D upload", color_id=120):
+        label = self._stage_label("H2D", sequence, tick)
+        with self.h2d_stream, time_range(label, color_id=120):
             slot.raw_batch_device.set(host_batch, stream=self.h2d_stream)
             slot.h2d_done.record(self.h2d_stream)
 
-        self._prefetched_slots.append(slot)
+        self._h2d_queue.append(slot)
         return sequence
 
-    def schedule_oldest_prefetched_batch(self) -> int:
-        if not self._prefetched_slots:
-            raise RuntimeError("No prefetched stream batch is ready to schedule.")
+    def schedule_oldest_h2d_batch(self, tick: int | None) -> int:
+        if not self._h2d_queue:
+            raise RuntimeError("No H2D-prefetched stream batch is ready to compute.")
 
-        slot = self._prefetched_slots.popleft()
+        slot = self._h2d_queue.popleft()
         if slot.sequence is None:
             raise RuntimeError("Cannot schedule an unassigned stream slot.")
 
-        self.compute_stream.wait_event(slot.h2d_done)
-        with self.compute_stream, time_range("streams compute batch", color_id=121):
+        label = self._stage_label("compute", slot.sequence, tick)
+        with self.compute_stream, time_range(label, color_id=121):
+            self.compute_stream.wait_event(slot.h2d_done)
             ready = self.process_batch_device(
                 raw_batch_device=slot.raw_batch_device,
                 real_batch_device=slot.real_batch_device,
@@ -202,9 +253,23 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
                 self.finalize_display_image_device(out=slot.output_device)
             slot.compute_done.record(self.compute_stream)
 
-        self.d2h_stream.wait_event(slot.compute_done)
-        with self.d2h_stream, time_range("streams D2H output", color_id=122):
-            if ready:
+        slot.display_ready = ready
+        self._compute_queue.append(slot)
+        return slot.sequence
+
+    def schedule_oldest_compute_batch(self, tick: int | None) -> int:
+        if not self._compute_queue:
+            raise RuntimeError("No computed stream batch is ready for D2H.")
+
+        slot = self._compute_queue.popleft()
+        if slot.sequence is None:
+            raise RuntimeError("Cannot schedule D2H for an unassigned stream slot.")
+
+        stage = "D2H" if slot.display_ready else "D2H no-output"
+        label = self._stage_label(stage, slot.sequence, tick)
+        with self.d2h_stream, time_range(label, color_id=122):
+            self.d2h_stream.wait_event(slot.compute_done)
+            if slot.display_ready:
                 slot.output_device.get(
                     out=slot.output_host,
                     stream=self.d2h_stream,
@@ -230,6 +295,7 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         self._collect_slot_output(slot)
         slot.host_input = None
         slot.sequence = None
+        slot.display_ready = False
         slot.output_ready = False
 
     def poll_completed_outputs(self) -> list[StreamOutput]:
@@ -263,8 +329,11 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
                 self._pending_outputs[0].d2h_done.synchronize()
 
     def finish(self) -> None:
-        if self._prefetched_slots:
-            self.discard_prefetched_batches()
+        while self._h2d_queue or self._compute_queue:
+            if self._h2d_queue:
+                self.schedule_oldest_h2d_batch(tick=None)
+            if self._compute_queue:
+                self.schedule_oldest_compute_batch(tick=None)
 
         with time_range("streams final H2D sync", color_id=125):
             self.h2d_stream.synchronize()
@@ -273,17 +342,6 @@ class SingleThreadStreamPowerDopplerPipeline(PowerDopplerPipeline):
         with time_range("streams final D2H sync", color_id=125):
             self.d2h_stream.synchronize()
         self.poll_completed_outputs()
-
-    def discard_prefetched_batches(self) -> None:
-        with time_range("streams discard prefetched H2D", color_id=125):
-            self.h2d_stream.synchronize()
-
-        while self._prefetched_slots:
-            slot = self._prefetched_slots.popleft()
-            slot.host_input = None
-            slot.sequence = None
-            slot.output_ready = False
-            slot.output_collected = True
 
     def _collect_slot_output(self, slot: StreamSlot) -> None:
         if not slot.output_ready or slot.output_collected:
@@ -314,17 +372,8 @@ class SingleThreadStreamBenchmarkRunner:
     def _submit_next_batch(self) -> int:
         return self.pipeline.submit_batch(next(self.host_batch_iter))
 
-    def _prefetch_next_batch(self) -> int:
-        return self.pipeline.prefetch_batch(next(self.host_batch_iter))
-
-    def _submit_next_batch_with_h2d_lookahead(self) -> int:
-        while (
-            self.pipeline.prefetched_batch_count
-            <= self.pipeline.runtime.h2d_prefetch_batches
-        ):
-            self._prefetch_next_batch()
-
-        return self.pipeline.schedule_oldest_prefetched_batch()
+    def _submit_pipeline_tick(self) -> int:
+        return self.pipeline.submit_pipeline_tick(next(self.host_batch_iter))
 
     def prime(self) -> None:
         batches_to_prime = self.pipeline.params.sliding_window_batches - 1
@@ -348,6 +397,7 @@ class SingleThreadStreamBenchmarkRunner:
         mode = self.pipeline.mode
 
         completed = 0
+        submitted = 0
         elapsed = 0.0
         last_image: np.ndarray | None = None
 
@@ -362,12 +412,18 @@ class SingleThreadStreamBenchmarkRunner:
             with time_range("streams steady-state benchmark loop", color_id=128):
                 t0 = perf_counter()
                 while elapsed < params.benchmark_seconds:
-                    self._submit_next_batch_with_h2d_lookahead()
+                    while (
+                        submitted - completed
+                        < self.pipeline.runtime.pipeline_prefetch_batches
+                    ):
+                        self._submit_pipeline_tick()
+                        submitted += 1
 
                     for output in self.pipeline.poll_completed_outputs():
                         completed += 1
                         last_image = output.image
-                        elapsed = perf_counter() - t0
+
+                    elapsed = perf_counter() - t0
 
                 # Keep the benchmark result tied to completed D2H outputs, but
                 # leave any extra in-flight batch out of the measured counters.

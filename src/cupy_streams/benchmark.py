@@ -37,7 +37,7 @@ def benchmark_mode(
         f"  precompute_static_tensors={mode.precompute_static_tensors} | "
         f"preallocate_work_buffers={mode.preallocate_work_buffers} | "
         f"num_slots={runtime.num_slots} | "
-        f"h2d_prefetch_batches={runtime.h2d_prefetch_batches}"
+        f"pipeline_prefetch_batches={runtime.pipeline_prefetch_batches}"
     )
     if mode.enable_dummy_gil_thread:
         print(
@@ -117,5 +117,5 @@ def _stream_mode_name(
 
     return (
         f"{name} | slots={runtime.num_slots} | "
-        f"h2d_prefetch={runtime.h2d_prefetch_batches}"
+        f"pipeline_prefetch={runtime.pipeline_prefetch_batches}"
     )

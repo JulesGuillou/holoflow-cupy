@@ -39,23 +39,27 @@ dtypes:
   complex: complex64
 
 execution:
-  # mode_matrix:
-  #   precompute_static_tensors: [false, true]
-  #   preallocate_work_buffers: [false, true]
-  #   dummy_gil_thread: [false]
+  mode_matrix:
+    precompute_static_tensors: [false, true]
+    preallocate_work_buffers: [false, true]
+    dummy_gil_thread: [false, true]
 
   dummy_gil_inner_loops: 200000
   dummy_gil_switch_interval_s: 0.0005
 
   # Example explicit mode list:
   #
-  modes:
-    - name: 'cupy-streams | precompute=on | prealloc=on | gil=off'
-      precompute_static_tensors: true
-      preallocate_work_buffers: true
-      enable_dummy_gil_thread: false
+  # modes:
+  #   - name: 'cupy-streams | precompute=on | prealloc=on | gil=off'
+  #     precompute_static_tensors: true
+  #     preallocate_work_buffers: true
+  #     enable_dummy_gil_thread: false
 
 streams:
   # Number of K in-flight buffer slots. Slot n % K is not reused until its
   # previous D2H completion event has completed.
   num_slots: 32
+
+  # Number of formal pipeline ticks kept submitted ahead of completed outputs.
+  # Each tick queues H2D(x_t), compute(x_{t-1}), and D2H(x_{t-2}) when available.
+  pipeline_prefetch_batches: 8

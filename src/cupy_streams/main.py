@@ -44,12 +44,14 @@ def load_stream_runtime_config(path: str | Path) -> SingleThreadStreamRuntimeCon
             streams_cfg.get("num_slots", SingleThreadStreamRuntimeConfig.num_slots),
             "streams.num_slots",
         ),
-        h2d_prefetch_batches=_as_non_negative_int(
-            streams_cfg.get(
+        pipeline_prefetch_batches=_as_positive_int(
+            _first_present(
+                streams_cfg,
+                "pipeline_prefetch_batches",
                 "h2d_prefetch_batches",
-                SingleThreadStreamRuntimeConfig.h2d_prefetch_batches,
+                default=SingleThreadStreamRuntimeConfig.pipeline_prefetch_batches,
             ),
-            "streams.h2d_prefetch_batches",
+            "streams.pipeline_prefetch_batches",
         ),
     )
 
@@ -63,13 +65,16 @@ def _as_positive_int(value: Any, name: str) -> int:
     return parsed
 
 
-def _as_non_negative_int(value: Any, name: str) -> int:
-    if isinstance(value, bool):
-        raise TypeError(f"{name} must be an integer, not bool.")
-    parsed = int(value)
-    if parsed < 0:
-        raise ValueError(f"{name} must be non-negative, got {parsed}.")
-    return parsed
+def _first_present(
+    mapping: Mapping[str, Any],
+    primary_key: str,
+    legacy_key: str,
+    *,
+    default: Any,
+) -> Any:
+    if primary_key in mapping:
+        return mapping[primary_key]
+    return mapping.get(legacy_key, default)
 
 
 def main() -> None:
@@ -85,7 +90,7 @@ def main() -> None:
     print(f"Using config: {args.config}")
     print(
         f"Single-thread stream runtime: num_slots={runtime.num_slots}, "
-        f"h2d_prefetch_batches={runtime.h2d_prefetch_batches}"
+        f"pipeline_prefetch_batches={runtime.pipeline_prefetch_batches}"
     )
 
     with time_range("streams inspect input", color_id=132):
