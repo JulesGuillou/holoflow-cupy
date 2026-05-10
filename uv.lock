@@ -276,7 +276,8 @@ dependencies = [
     { name = "pyyaml" },
     { name = "tabulate" },
     { name = "torch" },
-    { name = "triton-windows" },
+    { name = "triton", marker = "sys_platform == 'linux'" },
+    { name = "triton-windows", marker = "sys_platform == 'win32'" },
     { name = "viztracer" },
 ]
 
@@ -291,7 +292,8 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "tabulate", specifier = ">=0.10.0" },
     { name = "torch", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu130" },
-    { name = "triton-windows", specifier = ">=3.6.0.post26" },
+    { name = "triton", marker = "sys_platform == 'linux'", specifier = ">=3.6.0" },
+    { name = "triton-windows", marker = "sys_platform == 'win32'", specifier = ">=3.6.0.post26" },
     { name = "viztracer", specifier = ">=1.1.1" },
 ]
 

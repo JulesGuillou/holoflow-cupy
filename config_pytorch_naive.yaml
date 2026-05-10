@@ -6,7 +6,8 @@
 
 input:
   # path: 'E:\InputData\250220_GUJ0206_L.holo'
-  file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  # file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  file_path: /home/julesg/Downloads/250527_GUJ_L_2.holo
 
 signal:
   sample_rate_hz: 37000.0
@@ -39,18 +40,18 @@ dtypes:
   complex: complex64
 
 execution:
-  # mode_matrix:
-  #   precompute_static_tensors: [false, true]
-  #   preallocate_work_buffers: [false, true]
-  #   dummy_gil_thread: [false, true]
+  mode_matrix:
+    precompute_static_tensors: [false, true]
+    preallocate_work_buffers: [false, true]
+    dummy_gil_thread: [false, true]
 
   dummy_gil_inner_loops: 200000
-  dummy_gil_switch_interval_s: 0.0005
+  dummy_gil_switch_interval_s: 0.0000005
 
   # Example explicit mode list:
   #
-  modes:
-    - name: 'pytorch-naive | precompute=on | prealloc=on | gil=off'
-      precompute_static_tensors: true
-      preallocate_work_buffers: true
-      enable_dummy_gil_thread: false
+  # modes:
+  #   - name: 'pytorch-naive | precompute=on | prealloc=on | gil=off'
+  #     precompute_static_tensors: true
+  #     preallocate_work_buffers: true
+  #     enable_dummy_gil_thread: false

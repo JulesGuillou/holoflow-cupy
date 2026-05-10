@@ -19,7 +19,8 @@ dependencies = [
   "matplotlib>=3.10.8",
   "tabulate>=0.10.0",
   "torch>=2.11.0",
-  "triton-windows>=3.6.0.post26",
+  "triton-windows>=3.6.0.post26 ; sys_platform == 'win32'",
+  "triton>=3.6.0 ; sys_platform == 'linux'",
 ]
 
 [project.scripts]
