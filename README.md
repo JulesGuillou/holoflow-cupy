@@ -2,12 +2,12 @@
 
 ## Benchmark code layout
 
-The three CuPy benchmark implementations are intentionally isolated from each
-other:
+The benchmark implementations are intentionally isolated from each other:
 
 - `src/cupy_naive/`
 - `src/cupy_threaded/`
 - `src/cupy_streams/`
+- `src/pytorch_naive/`
 
 Each implementation follows the same local shape:
 
@@ -38,6 +38,28 @@ Capture CUDA and NVTX ranges with Nsight Systems:
 
 ```powershell
 nsys profile -t cuda,nvtx -o cupy_naive .\.venv\Scripts\python.exe -m cupy_naive.main --config config_cupy_naive.yaml
+```
+
+## PyTorch-naive benchmark
+
+The PyTorch-naive benchmark mirrors the CuPy-naive schedule and math, but uses
+PyTorch tensors, `torch.fft`, PyTorch-pinned host preload buffers, and
+`torch.cuda.nvtx` ranges. It is still a single host-thread, default-stream
+baseline: no explicit CUDA streams, no pipeline overlap, and one synchronization
+per exported display image. The fixed-shape tensor kernels are decorated with
+`@torch.compile(mode="default")`; the data-dependent ROI percentile
+selection stays eager.
+
+Run it with:
+
+```powershell
+uv run pytorch_naive --config config_pytorch_naive.yaml
+```
+
+Capture CUDA and NVTX ranges with Nsight Systems:
+
+```powershell
+nsys profile -t cuda,nvtx -o pytorch_naive .\.venv\Scripts\python.exe -m pytorch_naive.main --config config_pytorch_naive.yaml
 ```
 
 ## CuPy threaded benchmark

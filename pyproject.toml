@@ -18,6 +18,8 @@ dependencies = [
   "viztracer>=1.1.1",
   "matplotlib>=3.10.8",
   "tabulate>=0.10.0",
+  "torch>=2.11.0",
+  "triton-windows>=3.6.0.post26",
 ]
 
 [project.scripts]
@@ -25,6 +27,7 @@ holoflow = "holoflow.main:main"
 cupy_naive = "cupy_naive.main:main"
 cupy_threaded = "cupy_threaded.main:main"
 cupy_streams = "cupy_streams.main:main"
+pytorch_naive = "pytorch_naive.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -33,7 +36,14 @@ packages = [
   "src/cupy_naive",
   "src/cupy_threaded",
   "src/cupy_streams",
+  "src/pytorch_naive",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [tool.uv.sources]
 holofile = { git = "https://github.com/JulesGuillou/holofile.git", rev = "main" }
+torch = { index = "pytorch-cu130" }

@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-import cupyx
 import holofile
 import numpy as np
 
@@ -41,6 +40,8 @@ def preload_batches(path: str, info: InputInfo, params: Params) -> np.ndarray:
     This isolates the compute benchmark from file-I/O noise while keeping the
     host-side data residency explicit.
     """
+    import cupyx
+
     host_batches = cupyx.empty_pinned(
         (
             params.sliding_window_batches,
@@ -93,4 +94,3 @@ def validate_host_batches(
             f"Unexpected preloaded host batch shape: got {host_batches.shape}, "
             f"expected {expected_shape}."
         )
-
