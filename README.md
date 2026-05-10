@@ -9,6 +9,7 @@ The benchmark implementations are intentionally isolated from each other:
 - `src/cupy_streams/`
 - `src/pytorch_naive/`
 - `src/pytorch_threaded/`
+- `src/pytorch_streams/`
 
 Each implementation follows the same local shape:
 
@@ -82,6 +83,26 @@ Capture CUDA and NVTX ranges with Nsight Systems:
 
 ```powershell
 nsys profile -t cuda,nvtx -o pytorch_threaded .\.venv\Scripts\python.exe -m pytorch_threaded.main --config config_pytorch_threaded.yaml
+```
+
+## PyTorch single-thread stream benchmark
+
+The PyTorch stream benchmark keeps the PyTorch-naive math path and pinned host
+preload buffers, but submits asynchronous H2D, compute, and D2H work into three
+`torch.cuda.Stream` instances from one host thread. PyTorch CUDA events connect
+the stage dependencies and gate ring-buffer slot reuse, matching the CuPy
+stream scheduler shape without adding worker threads.
+
+Run it with:
+
+```powershell
+uv run pytorch_streams --config config_pytorch_streams.yaml
+```
+
+Capture CUDA and NVTX ranges with Nsight Systems:
+
+```powershell
+nsys profile -t cuda,nvtx -o pytorch_streams .\.venv\Scripts\python.exe -m pytorch_streams.main --config config_pytorch_streams.yaml
 ```
 
 ## CuPy threaded benchmark
