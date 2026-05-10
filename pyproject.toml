@@ -30,6 +30,7 @@ cupy_streams = "cupy_streams.main:main"
 pytorch_naive = "pytorch_naive.main:main"
 pytorch_threaded = "pytorch_threaded.main:main"
 pytorch_streams = "pytorch_streams.main:main"
+holoflow_nsys_profile = "holoflow_benchmarks.nsys_profile:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [

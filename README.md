@@ -22,6 +22,36 @@ Shared non-compute utilities live in `src/holoflow_benchmarks/`: config loading,
 input IO, reporting, memory-pool cleanup, GIL stress helpers, and benchmark
 statistics.
 
+## Nsight Systems profiling sweep
+
+Run Nsight Systems once for every resolved mode in every benchmark YAML:
+
+```powershell
+uv run holoflow_nsys_profile
+```
+
+This expands each config's `execution.mode_matrix` or `execution.modes` into
+generated single-mode configs under `nsys_reports/configs/`, then writes Nsight
+reports under `nsys_reports/<benchmark>/`. When `--duration` stops a still
+running benchmark, Nsight may return a non-zero exit code after writing the
+report; the sweep treats that as success if the expected `.nsys-rep` file was
+freshly generated. Use `--strict-exit-codes` to make any non-zero Nsight exit
+fail the sweep. The default Nsight arguments match the manual profiling command
+used for these benchmarks:
+
+```powershell
+nsys profile -f true -t cuda,nvtx,python-gil --python-backtrace=cuda --sample=cpu --delay=3 --duration=5
+```
+
+Useful variants:
+
+```powershell
+uv run holoflow_nsys_profile --dry-run
+uv run holoflow_nsys_profile --skip-existing
+uv run holoflow_nsys_profile --benchmark cupy_naive --duration 10
+uv run holoflow_nsys_profile --output-dir nsys_reports_long --keep-going
+```
+
 ## CuPy-naive benchmark
 
 The CuPy-naive benchmark is a deliberately single-stream, single-threaded
