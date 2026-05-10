@@ -1,0 +1,189 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from holoflow_benchmarks.config import load_benchmark_config, load_yaml_mapping
+from holoflow_benchmarks.io import read_input_info, validate_input
+from holoflow_benchmarks.reporting import format_report, show_image, write_report
+
+from .benchmark import benchmark_suite
+from .io import preload_batches
+from .nvtx import time_range
+from .runtime import clear_torch_pools
+from .schedule import ThreadedRuntimeConfig
+
+
+DEFAULT_CONFIG_PATH = Path("config_pytorch_threaded.yaml")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run the multi-threaded PyTorch LDH benchmark.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=f"Benchmark YAML file. Defaults to {DEFAULT_CONFIG_PATH}.",
+    )
+    return parser.parse_args()
+
+
+def load_threaded_runtime_config(path: str | Path) -> ThreadedRuntimeConfig:
+    raw = load_yaml_mapping(path)
+
+    threading_cfg = raw.get("threading", {})
+    if not isinstance(threading_cfg, Mapping):
+        raise TypeError("threading must be a mapping.")
+
+    execution_cfg = raw.get("execution", {})
+    if execution_cfg is not None and not isinstance(execution_cfg, Mapping):
+        raise TypeError("execution must be a mapping.")
+
+    default_gil_switch_interval = (
+        execution_cfg.get("dummy_gil_switch_interval_s")
+        if isinstance(execution_cfg, Mapping)
+        else None
+    )
+
+    return ThreadedRuntimeConfig(
+        queue_depth=_as_positive_int(
+            threading_cfg.get("queue_depth", ThreadedRuntimeConfig.queue_depth),
+            "threading.queue_depth",
+        ),
+        queue_put_policy=_as_queue_put_policy(
+            _first_present(
+                threading_cfg,
+                "queue_put_policy",
+                "producer_submit_policy",
+                default=ThreadedRuntimeConfig.queue_put_policy,
+            ),
+            "threading.queue_put_policy",
+        ),
+        queue_put_timeout_s=_as_positive_float(
+            _first_present(
+                threading_cfg,
+                "queue_put_timeout_s",
+                "producer_submit_timeout_s",
+                default=ThreadedRuntimeConfig.queue_put_timeout_s,
+            ),
+            "threading.queue_put_timeout_s",
+        ),
+        gil_switch_interval_s=_as_optional_positive_float(
+            threading_cfg.get("gil_switch_interval_s", default_gil_switch_interval),
+            "threading.gil_switch_interval_s",
+        ),
+    )
+
+
+def _as_positive_int(value: Any, name: str) -> int:
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer, not bool.")
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be positive, got {parsed}.")
+    return parsed
+
+
+def _first_present(
+    mapping: Mapping[str, Any],
+    primary_key: str,
+    legacy_key: str,
+    *,
+    default: Any,
+) -> Any:
+    if primary_key in mapping:
+        return mapping[primary_key]
+    return mapping.get(legacy_key, default)
+
+
+def _as_queue_put_policy(value: Any, name: str) -> str:
+    parsed = str(value)
+    if parsed not in {"timed_put", "nowait"}:
+        raise ValueError(f"{name} must be 'timed_put' or 'nowait', got {parsed!r}.")
+    return parsed
+
+
+def _as_positive_float(value: Any, name: str) -> float:
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be a float, not bool.")
+    parsed = float(value)
+    if parsed <= 0.0:
+        raise ValueError(f"{name} must be positive, got {parsed}.")
+    return parsed
+
+
+def _as_optional_positive_float(value: Any, name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be a float, not bool.")
+    parsed = float(value)
+    if parsed <= 0.0:
+        raise ValueError(f"{name} must be positive, got {parsed}.")
+    return parsed
+
+
+def main() -> None:
+    args = parse_args()
+
+    with time_range("pytorch-threaded load benchmark config", color_id=270):
+        params, modes = load_benchmark_config(
+            args.config,
+            implementation_name="pytorch-threaded",
+        )
+        runtime = load_threaded_runtime_config(args.config)
+
+    print(f"Using config: {args.config}")
+    print(
+        f"Threaded runtime: queue_depth={runtime.queue_depth}, "
+        f"queue_put_policy={runtime.queue_put_policy}, "
+        f"queue_put_timeout_s={runtime.queue_put_timeout_s}, "
+        f"gil_switch_interval_s={runtime.gil_switch_interval_s}"
+    )
+
+    with time_range("pytorch-threaded inspect input", color_id=271):
+        print("Inspecting input...")
+        info = read_input_info(params.file_path)
+        validate_input(info, params)
+
+    with time_range("pytorch-threaded preload host data", color_id=272):
+        print("Preloading host data...")
+        host_batches = preload_batches(params.file_path, info, params)
+
+    print(
+        f"Preloaded {params.temporal_support_frames} frames "
+        f"of shape ({info.height}, {info.width}) "
+        f"in PyTorch-pinned host memory."
+    )
+
+    with time_range("pytorch-threaded benchmark suite", color_id=273):
+        results = benchmark_suite(
+            host_batches=host_batches,
+            info=info,
+            params=params,
+            modes=modes,
+            runtime=runtime,
+        )
+
+    stats_list = [stats for _, stats in results]
+    report = format_report(stats_list)
+    print(report)
+
+    with time_range("pytorch-threaded write report", color_id=274):
+        report_path = write_report(params.report_path, stats_list)
+    print(f"Report written to: {report_path}")
+
+    if params.show_image and results:
+        with time_range("pytorch-threaded show image", color_id=275):
+            image, stats = results[-1]
+            show_image(image, stats)
+
+    clear_torch_pools()
+
+
+if __name__ == "__main__":
+    main()

@@ -8,6 +8,7 @@ The benchmark implementations are intentionally isolated from each other:
 - `src/cupy_threaded/`
 - `src/cupy_streams/`
 - `src/pytorch_naive/`
+- `src/pytorch_threaded/`
 
 Each implementation follows the same local shape:
 
@@ -60,6 +61,27 @@ Capture CUDA and NVTX ranges with Nsight Systems:
 
 ```powershell
 nsys profile -t cuda,nvtx -o pytorch_naive .\.venv\Scripts\python.exe -m pytorch_naive.main --config config_pytorch_naive.yaml
+```
+
+## PyTorch threaded benchmark
+
+The PyTorch threaded benchmark keeps the PyTorch-naive math path and pinned
+host preload buffers, but drives it with the same four-stage host pipeline used
+by the CuPy threaded benchmark: H2D upload, FFT-heavy GPU compute, sequential
+postprocessing, and D2H output. Each stage owns a PyTorch CUDA stream and
+hands work to the next stage through bounded queues after synchronizing that
+stage stream.
+
+Run it with:
+
+```powershell
+uv run pytorch_threaded --config config_pytorch_threaded.yaml
+```
+
+Capture CUDA and NVTX ranges with Nsight Systems:
+
+```powershell
+nsys profile -t cuda,nvtx -o pytorch_threaded .\.venv\Scripts\python.exe -m pytorch_threaded.main --config config_pytorch_threaded.yaml
 ```
 
 ## CuPy threaded benchmark

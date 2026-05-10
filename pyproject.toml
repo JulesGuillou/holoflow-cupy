@@ -28,6 +28,7 @@ cupy_naive = "cupy_naive.main:main"
 cupy_threaded = "cupy_threaded.main:main"
 cupy_streams = "cupy_streams.main:main"
 pytorch_naive = "pytorch_naive.main:main"
+pytorch_threaded = "pytorch_threaded.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -37,6 +38,7 @@ packages = [
   "src/cupy_threaded",
   "src/cupy_streams",
   "src/pytorch_naive",
+  "src/pytorch_threaded",
 ]
 
 [[tool.uv.index]]
