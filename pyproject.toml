@@ -19,6 +19,7 @@ dependencies = [
   "matplotlib>=3.10.8",
   "tabulate>=0.10.0",
   "torch>=2.11.0",
+  "jax[cuda13]>=0.8.1 ; sys_platform == 'linux'",
   "triton-windows>=3.6.0.post26 ; sys_platform == 'win32'",
   "triton>=3.6.0 ; sys_platform == 'linux'",
 ]
@@ -31,6 +32,8 @@ cupy_streams = "cupy_streams.main:main"
 pytorch_naive = "pytorch_naive.main:main"
 pytorch_threaded = "pytorch_threaded.main:main"
 pytorch_streams = "pytorch_streams.main:main"
+jax_naive = "jax_naive.main:main"
+jax_streams = "jax_streams.main:main"
 holoflow_nsys_profile = "holoflow_benchmarks.nsys_profile:main"
 
 [tool.hatch.build.targets.wheel]
@@ -43,6 +46,8 @@ packages = [
   "src/pytorch_naive",
   "src/pytorch_threaded",
   "src/pytorch_streams",
+  "src/jax_naive",
+  "src/jax_streams",
 ]
 
 [[tool.uv.index]]

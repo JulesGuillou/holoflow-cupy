@@ -78,6 +78,18 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         config_path=Path("config_pytorch_streams.yaml"),
         implementation_name="pytorch-streams",
     ),
+    BenchmarkSpec(
+        name="jax_naive",
+        command="jax_naive",
+        config_path=Path("config_jax_naive.yaml"),
+        implementation_name="jax-naive",
+    ),
+    BenchmarkSpec(
+        name="jax_streams",
+        command="jax_streams",
+        config_path=Path("config_jax_streams.yaml"),
+        implementation_name="jax-streams",
+    ),
 )
 NSYS_DURATION_TERMINATION_EXIT_CODES = {143}
 

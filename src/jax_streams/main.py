@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from holoflow_benchmarks.config import load_benchmark_config, load_yaml_mapping
+from holoflow_benchmarks.io import read_input_info, validate_input
+from holoflow_benchmarks.reporting import format_report, show_image, write_report
+
+from jax_naive.platform import require_linux
+
+
+DEFAULT_CONFIG_PATH = Path("config_jax_streams.yaml")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run the Linux-only JAX-managed stream LDH benchmark.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=f"Benchmark YAML file. Defaults to {DEFAULT_CONFIG_PATH}.",
+    )
+    return parser.parse_args()
+
+
+def load_stream_runtime_config(path: str | Path):
+    from .schedule import JaxManagedStreamRuntimeConfig
+
+    raw = load_yaml_mapping(path)
+
+    streams_cfg = raw.get("streams", {})
+    if not isinstance(streams_cfg, Mapping):
+        raise TypeError("streams must be a mapping.")
+
+    return JaxManagedStreamRuntimeConfig(
+        num_slots=_as_positive_int(
+            streams_cfg.get("num_slots", JaxManagedStreamRuntimeConfig.num_slots),
+            "streams.num_slots",
+        ),
+        pipeline_prefetch_batches=_as_positive_int(
+            _first_present(
+                streams_cfg,
+                "pipeline_prefetch_batches",
+                "h2d_prefetch_batches",
+                default=JaxManagedStreamRuntimeConfig.pipeline_prefetch_batches,
+            ),
+            "streams.pipeline_prefetch_batches",
+        ),
+    )
+
+
+def _as_positive_int(value: Any, name: str) -> int:
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be an integer, not bool.")
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be positive, got {parsed}.")
+    return parsed
+
+
+def _first_present(
+    mapping: Mapping[str, Any],
+    primary_key: str,
+    legacy_key: str,
+    *,
+    default: Any,
+) -> Any:
+    if primary_key in mapping:
+        return mapping[primary_key]
+    return mapping.get(legacy_key, default)
+
+
+def main() -> None:
+    require_linux("JAX-managed stream benchmark")
+
+    from .benchmark import benchmark_suite
+    from .io import preload_batches
+    from .nvtx import time_range
+    from .runtime import clear_jax_runtime
+
+    args = parse_args()
+
+    with time_range("jax-streams load benchmark config", color_id=531):
+        params, modes = load_benchmark_config(
+            args.config,
+            implementation_name="jax-streams",
+        )
+        runtime = load_stream_runtime_config(args.config)
+
+    print(f"Using config: {args.config}")
+    print(
+        f"JAX-managed stream runtime: num_slots={runtime.num_slots}, "
+        f"pipeline_prefetch_batches={runtime.pipeline_prefetch_batches}"
+    )
+
+    with time_range("jax-streams inspect input", color_id=532):
+        print("Inspecting input...")
+        info = read_input_info(params.file_path)
+        validate_input(info, params)
+
+    with time_range("jax-streams preload host data", color_id=533):
+        print("Preloading host data...")
+        host_batches = preload_batches(params.file_path, info, params)
+
+    print(
+        f"Preloaded {params.temporal_support_frames} frames "
+        f"of shape ({info.height}, {info.width}) "
+        f"in NumPy host memory for JAX transfer."
+    )
+
+    with time_range("jax-streams benchmark suite", color_id=534):
+        results = benchmark_suite(
+            host_batches=host_batches,
+            info=info,
+            params=params,
+            modes=modes,
+            runtime=runtime,
+        )
+
+    stats_list = [stats for _, stats in results]
+    report = format_report(stats_list)
+    print(report)
+
+    with time_range("jax-streams write report", color_id=535):
+        report_path = write_report(params.report_path, stats_list)
+    print(f"Report written to: {report_path}")
+
+    if params.show_image and results:
+        with time_range("jax-streams show image", color_id=536):
+            image, stats = results[-1]
+            show_image(image, stats)
+
+    clear_jax_runtime()
+
+
+if __name__ == "__main__":
+    main()

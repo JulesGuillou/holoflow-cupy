@@ -10,6 +10,8 @@ The benchmark implementations are intentionally isolated from each other:
 - `src/pytorch_naive/`
 - `src/pytorch_threaded/`
 - `src/pytorch_streams/`
+- `src/jax_naive/`
+- `src/jax_streams/`
 
 Each implementation follows the same local shape:
 
@@ -133,6 +135,46 @@ Capture CUDA and NVTX ranges with Nsight Systems:
 
 ```powershell
 nsys profile -t cuda,nvtx -o pytorch_streams .\.venv\Scripts\python.exe -m pytorch_streams.main --config config_pytorch_streams.yaml
+```
+
+## JAX-naive benchmark
+
+The JAX-naive benchmark is Linux-only and mirrors the single-host-thread naive
+schedule. It uses JAX arrays, `jax.numpy.fft`, JIT-compiled fixed-shape kernels,
+and one `block_until_ready`/host-copy path per exported display image. The JAX
+CUDA dependency is platform-gated in `pyproject.toml`, so the GUI and existing
+CuPy/PyTorch benchmarks can still be installed and run on Windows.
+
+Run it with:
+
+```bash
+uv run jax_naive --config config_jax_naive.yaml
+```
+
+Capture CUDA and JAX profiler ranges with Nsight Systems:
+
+```bash
+nsys profile -t cuda,nvtx -o jax_naive uv run jax_naive --config config_jax_naive.yaml
+```
+
+## JAX-managed stream benchmark
+
+JAX owns CUDA stream selection and dependency tracking, so the stream benchmark
+does not create CUDA stream or event objects. Instead, one host thread keeps a
+bounded number of JAX-dispatched display outputs in flight, starts host copies
+with `copy_to_host_async`, and collects the oldest output with
+`block_until_ready`.
+
+Run it with:
+
+```bash
+uv run jax_streams --config config_jax_streams.yaml
+```
+
+Capture CUDA and JAX profiler ranges with Nsight Systems:
+
+```bash
+nsys profile -t cuda,nvtx -o jax_streams uv run jax_streams --config config_jax_streams.yaml
 ```
 
 ## CuPy threaded benchmark

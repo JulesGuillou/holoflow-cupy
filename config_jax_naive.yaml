@@ -1,0 +1,58 @@
+# JAX-naive LDH benchmark configuration.
+#
+# This benchmark is Linux-only because the CUDA-enabled JAX wheel is only
+# installed on Linux. It mirrors the CuPy/PyTorch naive schedule: one host
+# thread, one JAX-dispatched compute chain, one D2H display export, and one
+# explicit readiness wait per output image.
+
+input:
+  # path: 'E:\InputData\250220_GUJ0206_L.holo'
+  # file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  file_path: /home/julesg/Downloads/250527_GUJ_L_2.holo
+
+signal:
+  sample_rate_hz: 37000.0
+  doppler_low_hz: 8000.0
+  doppler_high_hz: 16000.0
+
+  propagation_distance_m: 4.86e-1
+  wavelength_m: 8.52e-7
+  dx_m: 2.0e-5
+  dy_m: 2.0e-5
+
+schedule:
+  batch_frames: 32
+  batches_per_output: 64
+
+benchmark:
+  seconds: 10.0
+  warmup_outputs: 1
+
+display:
+  report_path: 'jax_naive_report.txt'
+  show_image: true
+  contrast_roi_radius: 0.8
+  contrast_low_percentile: 0.2
+  contrast_high_percentile: 99.8
+
+dtypes:
+  acquisition: uint8
+  real: float32
+  complex: complex64
+
+execution:
+  # modes:
+  #   - name: 'jax-naive | precompute=on | prealloc=on | gil=off'
+  #     precompute_static_tensors: true
+  #     preallocate_work_buffers: true
+  #     enable_dummy_gil_thread: false
+
+  dummy_gil_inner_loops: 200000
+  dummy_gil_switch_interval_s: 0.0000005
+
+  # Matrix mode is still supported:
+  #
+  mode_matrix:
+    precompute_static_tensors: [false, true]
+    preallocate_work_buffers: [false, true]
+    dummy_gil_thread: [false, true]
