@@ -35,6 +35,9 @@ pytorch_streams = "pytorch_streams.main:main"
 jax_naive = "jax_naive.main:main"
 jax_streams = "jax_streams.main:main"
 holoflow_nsys_profile = "holoflow_benchmarks.nsys_profile:main"
+holoflow_nsys_export_sqlite = "holoflow_benchmarks.nsys_export_sqlite:main"
+holoflow_nsys_explore = "holoflow_benchmarks.nsys_explore_sqlite:main"
+holoflow_nsys_iteration_metrics = "holoflow_benchmarks.nsys_iteration_metrics:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [
