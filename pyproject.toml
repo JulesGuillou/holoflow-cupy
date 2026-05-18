@@ -38,6 +38,7 @@ holoflow_nsys_profile = "holoflow_benchmarks.nsys_profile:main"
 holoflow_nsys_export_sqlite = "holoflow_benchmarks.nsys_export_sqlite:main"
 holoflow_nsys_explore = "holoflow_benchmarks.nsys_explore_sqlite:main"
 holoflow_nsys_iteration_metrics = "holoflow_benchmarks.nsys_iteration_metrics:main"
+holoflow_metrics_pipeline = "holoflow_benchmarks.metrics_pipeline:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [

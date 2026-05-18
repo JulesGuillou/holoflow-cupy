@@ -207,6 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 # Benchmark and profiler outputs
+generated/
 *_report.txt
 nsys_reports/
 *.nsys-rep

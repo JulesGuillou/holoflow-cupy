@@ -509,6 +509,25 @@ def _compute_metrics(
     return [rows_by_index[i] for i in range(len(windows))]
 
 
+def compute_metrics(
+    sqlite_path: Path,
+    *,
+    process_name: str = "process_batch",
+    export_name: str = "export_display_image",
+    sync_name: str = "sync per output",
+    skip_warmup: int = 0,
+    max_iterations: int | None = None,
+) -> list[MetricsRow]:
+    return _compute_metrics(
+        sqlite_path,
+        process_name=process_name,
+        export_name=export_name,
+        sync_name=sync_name,
+        skip_warmup=skip_warmup,
+        max_iterations=max_iterations,
+    )
+
+
 def _write_csv(path: Path, rows: list[MetricsRow]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
