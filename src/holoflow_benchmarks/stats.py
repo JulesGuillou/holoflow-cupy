@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from statistics import fmean, stdev
 
 import numpy as np
 
@@ -60,6 +62,76 @@ class BenchmarkStats:
     dummy_gil_iterations: int
     dummy_gil_iterations_per_second: float
     dummy_gil_switch_interval_s: float | None
+
+
+@dataclass(frozen=True)
+class BenchmarkSeries:
+    """Repeated steady-state measurements for one execution mode."""
+
+    image: np.ndarray
+    runs: tuple[BenchmarkStats, ...]
+
+    def __post_init__(self) -> None:
+        if not self.runs:
+            raise ValueError("A benchmark series must contain at least one run.")
+        mode_names = {run.mode_name for run in self.runs}
+        if len(mode_names) != 1:
+            raise ValueError("All runs in a benchmark series must use the same mode.")
+
+
+@dataclass(frozen=True)
+class ThroughputSummary:
+    repetitions: int
+    mean_input_fps: float
+    sample_std_input_fps: float | None
+    coefficient_of_variation_percent: float | None
+    min_input_fps: float
+    max_input_fps: float
+
+
+def summarize_throughput(series: BenchmarkSeries) -> ThroughputSummary:
+    values = [run.input_fps for run in series.runs]
+    mean = fmean(values)
+    sample_std = stdev(values) if len(values) >= 2 else None
+    coefficient_of_variation = (
+        100.0 * sample_std / mean
+        if sample_std is not None and mean != 0.0
+        else None
+    )
+    return ThroughputSummary(
+        repetitions=len(values),
+        mean_input_fps=mean,
+        sample_std_input_fps=sample_std,
+        coefficient_of_variation_percent=coefficient_of_variation,
+        min_input_fps=min(values),
+        max_input_fps=max(values),
+    )
+
+
+def run_repeated_modes(
+    *,
+    modes: Sequence[ExecutionMode],
+    repetitions: int,
+    run_mode: Callable[[ExecutionMode], tuple[np.ndarray, BenchmarkStats]],
+) -> list[BenchmarkSeries]:
+    """Run all repetitions of each mode before advancing to the next mode."""
+    if repetitions <= 0:
+        raise ValueError("repetitions must be positive.")
+
+    results: list[BenchmarkSeries] = []
+    for mode in modes:
+        runs: list[BenchmarkStats] = []
+        final_image: np.ndarray | None = None
+        for repetition in range(1, repetitions + 1):
+            print(f"\nRepetition {repetition}/{repetitions}: {mode.name}")
+            final_image, stats = run_mode(mode)
+            runs.append(stats)
+
+        if final_image is None:  # Defensive; repetitions is validated above.
+            raise RuntimeError("Benchmark mode produced no image.")
+        results.append(BenchmarkSeries(image=final_image, runs=tuple(runs)))
+
+    return results
 
 
 def make_benchmark_stats(
@@ -133,4 +205,3 @@ def make_benchmark_stats(
         ),
         dummy_gil_switch_interval_s=measurement.dummy_gil_switch_interval_s,
     )
-

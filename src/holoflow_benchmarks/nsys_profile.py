@@ -340,6 +340,14 @@ def single_mode_config(
     execution["modes"] = [mode_to_yaml(mode)]
     generated["execution"] = execution
 
+    benchmark_cfg = generated.get("benchmark", {})
+    if not isinstance(benchmark_cfg, Mapping):
+        raise TypeError("benchmark must be a mapping.")
+
+    benchmark = dict(benchmark_cfg)
+    benchmark["repetitions"] = 1
+    generated["benchmark"] = benchmark
+
     display_cfg = generated.get("display", {})
     if not isinstance(display_cfg, Mapping):
         raise TypeError("display must be a mapping.")

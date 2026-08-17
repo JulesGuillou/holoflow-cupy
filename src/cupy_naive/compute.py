@@ -8,6 +8,45 @@ from cupyx.profiler import time_range
 from holoflow_benchmarks.config import ExecutionMode, Params
 from holoflow_benchmarks.io import InputInfo
 
+from contextlib import contextmanager
+
+try:
+    import ittapi.compat as itt
+except ImportError:
+    itt = None
+
+_vtune_domain = itt.domain_create("cupy_postprocess") if itt is not None else None
+
+
+@contextmanager
+def vtune_collect(name: str):
+    """Actually enables VTune collection for this region only."""
+    if itt is None:
+        yield
+        return
+
+    itt.resume()
+    itt.task_begin(_vtune_domain, name)
+    try:
+        yield
+    finally:
+        itt.task_end(_vtune_domain)
+        itt.pause()
+
+
+@contextmanager
+def vtune_task(name: str):
+    """Only labels a nested region. Does not pause/resume collection."""
+    if itt is None:
+        yield
+        return
+
+    itt.task_begin(_vtune_domain, name)
+    try:
+        yield
+    finally:
+        itt.task_end(_vtune_domain)
+
 
 def doppler_bin_range(
     window_size: int,
@@ -317,7 +356,9 @@ class PowerDopplerPipeline:
         return self.sliding_mean.push(batch_power)
 
     @time_range("finalize_output", color_id=6)
-    def finalize_display_image_device(self, out: cp.ndarray | None = None) -> cp.ndarray:
+    def finalize_display_image_device(
+        self, out: cp.ndarray | None = None
+    ) -> cp.ndarray:
         with time_range("average", color_id=7):
             averaged = self.sliding_mean.mean()
 
@@ -390,3 +431,20 @@ class PowerDopplerPipeline:
             power = cp.abs(propagated) ** 2
             return power.sum(axis=0)
 
+        # VTune-only diagnostic experiment. Keep disabled for throughput runs:
+        # it intentionally repeats the power calculation and reduction 100 times.
+        # To profile this region in isolation, temporarily replace the one-pass
+        # block above with the following code, then restore it before benchmarking.
+        #
+        # with vtune_collect("accumulate power only"):
+        #     for _ in range(100):
+        #         with time_range("accumulate power", color_id=11):
+        #             with vtune_task("power"):
+        #                 with time_range("power", color_id=111):
+        #                     power = cp.abs(propagated) ** 2
+        #
+        #             with vtune_task("sum over Doppler bins"):
+        #                 with time_range("sum over Doppler bins", color_id=112):
+        #                     result = cp.sum(power, axis=0)
+        #
+        # return result

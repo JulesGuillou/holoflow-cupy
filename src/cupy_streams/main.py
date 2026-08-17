@@ -117,18 +117,17 @@ def main() -> None:
             runtime=runtime,
         )
 
-    stats_list = [stats for _, stats in results]
-    report = format_report(stats_list)
+    report = format_report(results)
     print(report)
 
     with time_range("write stream report", color_id=135):
-        report_path = write_report(params.report_path, stats_list)
+        report_path = write_report(params.report_path, results)
     print(f"Report written to: {report_path}")
 
     if params.show_image and results:
         with time_range("show stream image", color_id=136):
-            image, stats = results[-1]
-            show_image(image, stats)
+            result = results[-1]
+            show_image(result.image, result.runs[-1])
 
     clear_cupy_pools()
 

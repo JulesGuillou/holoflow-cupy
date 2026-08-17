@@ -24,6 +24,29 @@ Shared non-compute utilities live in `src/holoflow_benchmarks/`: config loading,
 input IO, reporting, memory-pool cleanup, GIL stress helpers, and benchmark
 statistics.
 
+## Repeated throughput measurements
+
+Each benchmark mode is measured repeatedly so throughput variability can be
+reported across independent timed windows. Configure the number of trials in
+the benchmark YAML; it defaults to 10 when omitted:
+
+```yaml
+benchmark:
+  seconds: 10.0
+  repetitions: 10
+  warmup_outputs: 1
+```
+
+All repetitions of one execution mode run before the suite advances to the
+next mode. Every repetition rebuilds and warms its pipeline before timing, while
+the input data remains preloaded outside the measured window. Reports include
+the arithmetic mean, sample standard deviation (`n - 1`), coefficient of
+variation, range, and every raw FPS measurement. Table values can therefore be
+reported as `mean ± SD frames/s (n = 10)`.
+
+Nsight Systems profiling remains a single-run workflow: generated profiling
+configs always override `benchmark.repetitions` to 1.
+
 ## Nsight Systems profiling sweep
 
 Run Nsight Systems once for every resolved mode in every benchmark YAML:

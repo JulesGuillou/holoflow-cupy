@@ -34,6 +34,7 @@ class Params:
 
     benchmark_seconds: float
     warmup_outputs: int
+    benchmark_repetitions: int
 
     show_image: bool
     contrast_roi_radius: float
@@ -164,6 +165,10 @@ def _load_params(raw: Mapping[str, Any]) -> Params:
         warmup_outputs=as_int(
             required(benchmark_cfg, "warmup_outputs"),
             "benchmark.warmup_outputs",
+        ),
+        benchmark_repetitions=as_strict_int(
+            benchmark_cfg.get("repetitions", 10),
+            "benchmark.repetitions",
         ),
         show_image=as_bool(required(display_cfg, "show_image"), "display.show_image"),
         contrast_roi_radius=as_float(
@@ -332,6 +337,8 @@ def _validate_params(params: Params) -> None:
         raise ValueError("benchmark.seconds must be positive.")
     if params.warmup_outputs < 0:
         raise ValueError("benchmark.warmup_outputs must be non-negative.")
+    if params.benchmark_repetitions <= 0:
+        raise ValueError("benchmark.repetitions must be positive.")
     if not (0.0 < params.contrast_roi_radius <= 1.0):
         raise ValueError("display.contrast_roi_radius must lie in (0, 1].")
     if not (
@@ -369,6 +376,12 @@ def as_int(value: Any, name: str) -> int:
     return int(value)
 
 
+def as_strict_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer.")
+    return value
+
+
 def as_float(value: Any, name: str) -> float:
     if isinstance(value, bool):
         raise TypeError(f"{name} must be a float, not bool.")
@@ -395,4 +408,3 @@ def as_bool_list(value: Any, name: str) -> list[bool]:
         raise TypeError(f"{name} must be a boolean or a list of booleans.")
 
     return [as_bool(item, f"{name}[{index}]") for index, item in enumerate(value)]
-

@@ -22,6 +22,8 @@ dependencies = [
   "jax[cuda13]>=0.8.1 ; sys_platform == 'linux'",
   "triton-windows>=3.6.0.post26 ; sys_platform == 'win32'",
   "triton>=3.6.0 ; sys_platform == 'linux'",
+  "scalene>=2.3.0",
+  "ittapi>=1.2.1",
 ]
 
 [project.scripts]

@@ -6,8 +6,8 @@
 
 input:
   # path: 'E:\InputData\250220_GUJ0206_L.holo'
-  # file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
-  file_path: /home/julesg/Downloads/250527_GUJ_L_2.holo
+  file_path: C:\Users\guill\Documents\holofiles_data\250527_GUJ_L_2.holo
+  # file_path: /home/julesg/Downloads/250527_GUJ_L_2.holo
 
 signal:
   sample_rate_hz: 37000.0
@@ -25,11 +25,12 @@ schedule:
 
 benchmark:
   seconds: 10.0
+  repetitions: 50
   warmup_outputs: 1
 
 display:
   report_path: 'pytorch_threaded_report.txt'
-  show_image: true
+  show_image: false
   contrast_roi_radius: 0.8
   contrast_low_percentile: 0.2
   contrast_high_percentile: 99.8
@@ -41,8 +42,8 @@ dtypes:
 
 execution:
   mode_matrix:
-    precompute_static_tensors: [false, true]
-    preallocate_work_buffers: [false, true]
+    precompute_static_tensors: [true]
+    preallocate_work_buffers: [true]
     dummy_gil_thread: [false, true]
 
   dummy_gil_inner_loops: 200000

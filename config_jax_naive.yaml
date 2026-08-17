@@ -26,6 +26,7 @@ schedule:
 
 benchmark:
   seconds: 10.0
+  repetitions: 10
   warmup_outputs: 1
 
 display:

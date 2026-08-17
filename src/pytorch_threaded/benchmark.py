@@ -6,7 +6,12 @@ import numpy as np
 
 from holoflow_benchmarks.config import ExecutionMode, Params
 from holoflow_benchmarks.io import InputInfo, cycle_batches, validate_host_batches
-from holoflow_benchmarks.stats import BenchmarkStats, make_benchmark_stats
+from holoflow_benchmarks.stats import (
+    BenchmarkSeries,
+    BenchmarkStats,
+    make_benchmark_stats,
+    run_repeated_modes,
+)
 
 from .compute import doppler_bin_range
 from .nvtx import time_range
@@ -79,20 +84,21 @@ def benchmark_suite(
     params: Params,
     modes: Sequence[ExecutionMode],
     runtime: ThreadedRuntimeConfig,
-) -> list[tuple[np.ndarray, BenchmarkStats]]:
-    results: list[tuple[np.ndarray, BenchmarkStats]] = []
-
-    for mode in modes:
-        image, stats = benchmark_mode(
+) -> list[BenchmarkSeries]:
+    def run_mode(mode: ExecutionMode) -> tuple[np.ndarray, BenchmarkStats]:
+        return benchmark_mode(
             host_batches=host_batches,
             info=info,
             params=params,
             mode=mode,
             runtime=runtime,
         )
-        results.append((image, stats))
 
-    return results
+    return run_repeated_modes(
+        modes=modes,
+        repetitions=params.benchmark_repetitions,
+        run_mode=run_mode,
+    )
 
 
 def _threaded_mode_name(mode: ExecutionMode) -> str:

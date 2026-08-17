@@ -68,6 +68,7 @@ def _sanity_params() -> Params:
         dy_m=2.0e-5,
         benchmark_seconds=0.01,
         warmup_outputs=0,
+        benchmark_repetitions=1,
         show_image=False,
         contrast_roi_radius=0.8,
         contrast_low_percentile=0.2,
